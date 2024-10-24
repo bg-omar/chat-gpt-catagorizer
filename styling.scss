@@ -1,0 +1,160 @@
+/* Set the body or main container to 100% width */
+body,
+html {
+	width: 100%;
+}
+
+/* Target the chat container and force it to occupy the full width */
+.mx-auto,
+.flex,
+.flex-1,
+.gap-4,
+.text-base,
+.md,
+.lg:gap-6,
+.md,
+.lg,
+.xl,
+.lg,
+.w-full,
+.mx-auto {
+	width: 90% !important;
+	max-width: 90% !important;
+	min-width: 90% !important;
+	padding: 0;
+}
+
+h3 {
+	color: #f0f;
+	width: 90% !important;
+	padding: .5rem 1rem !important;
+  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	border: 1px dotted #fff;
+  line-height: .5rem;
+	background-color: #202;
+}
+
+h4 {
+	color: #64edd3;
+	width: 90% !important;
+	border: 1px dotted #fff;
+	padding: .5rem 1rem !important;
+	line-height: .5rem;
+	margin: 0;
+	background-color: #202;
+  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+}
+
+.flex-row-reverse {
+	flex-direction: row;
+}
+
+.mr-1 .rounded-xl .items-center .text-sm {
+	color: #f0f;
+	font-size: 1.25rem;
+	line-height: 1rem;
+	border-color: #f0f;
+}
+
+.mr-1 .rounded-xl .items-center {
+	color: #f0f;
+	border-color: #f0f;
+}
+
+.rounded-xl .items-center {
+	color: #f0f;
+	border-color: #f0f;
+}
+
+.highlighted {
+	padding: 3px;
+	margin: -7px 0;
+	font-weight: bold !important; /* Optionally make it bold */
+}
+
+.p-2 {
+	padding: 0.25rem;
+}
+
+.text-sm {
+	font-size: 0.75rem;
+	line-height: 1rem;
+}
+
+.mx-auto {
+	// Center the container
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.flex {
+	display: flex;
+}
+
+.flex-1 {
+	flex: 1; // Make the container take up available space
+}
+
+.gap-4 {
+	gap: 1rem; // You can tweak this if needed
+}
+
+.md\:gap-5 {
+	@media (min-width: 768px) {
+		gap: 1.25rem;
+	}
+}
+
+.lg\:gap-6 {
+	@media (min-width: 1024px) {
+		gap: 1.5rem;
+	}
+}
+
+.md\:max-w-3xl,
+.lg\:max-w-\[40rem\],
+.xl\:max-w-\[48rem\] {
+	// Remove restrictive maximum widths for wider display
+	@media (min-width: 768px) {
+		max-width: 90%;
+	}
+}
+
+// Ensure the container always takes 90% of the available width
+.group\/conversation-turn {
+	width: 90%;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+// Other layout tweaks to ensure consistent appearance
+.flex-shrink-0 {
+	flex-shrink: 0;
+}
+
+.min-w-0 {
+	min-width: 0;
+}
+
+.items-end {
+	align-items: flex-end;
+}
+
+// Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
+.gizmo-bot-avatar {
+	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
+}
+
+// Any additional rules to override padding/margin if necessary
+.p-1 {
+	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
+}
+
+.custom-width {
+    width: 90% !important;  // Or any desired value
+}
+
+
+.mt-5 {
+    margin: 0;
+}
