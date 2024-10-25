@@ -24,10 +24,22 @@ html {
 	padding: 0;
 }
 
+
 h3 {
-	width: 100% !important;
+			
+			width: 100% !important;
+	
+			margin: .4rem 0 !important;
+
+		  line-height: 1rem;
+			background-color: #202;
+			min-height: 1rem;
+			top: 0px;
+
+
 	padding: .5rem 1rem !important;
   box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	border: 1px dotted #fff;
   line-height: .5rem;
 	background-color: #202;
 }
@@ -36,7 +48,7 @@ h4 {
 	color: #64edd3;
 	width: 100% !important;
 	border: 1px dotted #fff;
-	padding: .5rem 1rem !important;
+	padding: 0 1rem !important;
 	line-height: .5rem;
 	margin: 0;
 	background-color: #202;
@@ -44,7 +56,22 @@ h4 {
 }
 
 .h-9 {
-    height: ;
+    height: 1rem;
+}
+
+div.relative.mt-5 {
+
+		h3 {
+			
+			width: 100% !important;
+			padding: 0 1rem !important;
+			margin: .4rem 0 !important;
+		  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+		  line-height: 1rem;
+			background-color: #202;
+			min-height: 1rem;
+			top: 0px;
+}
 }
 
 .flex-row-reverse {
