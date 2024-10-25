@@ -1,4 +1,3 @@
-// Categorize by rename chats and writing between brackets like so: [catagory]
 document.addEventListener('DOMContentLoaded', () => {
     repeater();
     initializeMutationObserver();
