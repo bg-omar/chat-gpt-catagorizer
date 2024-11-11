@@ -9,9 +9,20 @@ function initializeMutationObserver() {
     const config = { childList: true, subtree: true, characterData: true };
 
     const callback = (mutationsList) => {
+        let isObserving = true;
+
         for (let mutation of mutationsList) {
-            if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                checkAndReplaceText();
+            if ((mutation.type === 'childList' || mutation.type === 'characterData') && isObserving) {
+                isObserving = false;
+                try {
+                    if (document.body.contains(mutation.target)) { // Ensure target exists
+                        checkAndReplaceText();
+                    }
+                } catch (e) {
+                    console.error("Error in mutation callback:", e);
+                } finally {
+                    isObserving = true;
+                }
             }
         }
     };
@@ -23,13 +34,41 @@ function initializeMutationObserver() {
 }
 
 function repeater() {
-    const firstInterval = setInterval(checkAndReplaceText, 1000);
-		const firstSort = setInterval(sortLists, 4500);
+    const firstInterval = setInterval(() => {
+        try {
+            checkAndReplaceText();
+        } catch (e) {
+            console.error("Error in checkAndReplaceText interval:", e);
+        }
+    }, 1000);
+
+    const firstSort = setInterval(() => {
+        try {
+            sortLists();
+        } catch (e) {
+            console.error("Error in sortLists interval:", e);
+        }
+    }, 4500);
+
     setTimeout(() => {
         clearInterval(firstInterval);
         clearInterval(firstSort);
-        setInterval(checkAndReplaceText, 30000);
-        setInterval(sortLists, 30000);
+
+        setInterval(() => {
+            try {
+                checkAndReplaceText();
+            } catch (e) {
+                console.error("Error in checkAndReplaceText interval after timeout:", e);
+            }
+        }, 30000);
+
+        setInterval(() => {
+            try {
+                sortLists();
+            } catch (e) {
+                console.error("Error in sortLists interval after timeout:", e);
+            }
+        }, 30000);
     }, 20000);
 }
 
@@ -44,8 +83,13 @@ function checkAndReplaceText() {
     ];
     let colorIndex = 0;
 
-    // Load color assignments from localStorage
-    const wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+    let wordColors = {};
+    try {
+        wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+    } catch (e) {
+        console.error("Error parsing wordColors from localStorage:", e);
+        wordColors = {};
+    }
 
     divElements.forEach((divElement) => {
         if (divElement.querySelector('span')) return;
@@ -63,29 +107,38 @@ function checkAndReplaceText() {
 
         const match = regex.exec(textContent);
         if (match && match[1]) {
-            divElement.closest('li').setAttribute('data-category', match[1].trim());
+            divElement.closest('li')?.setAttribute('data-category', match[1].trim());
         }
 
         divElement.innerHTML = newText;
     });
 
-    localStorage.setItem('wordColors', JSON.stringify(wordColors));
+    try {
+        localStorage.setItem('wordColors', JSON.stringify(wordColors));
+    } catch (e) {
+        console.error("Error saving wordColors to localStorage:", e);
+    }
 }
 
 function sortLists() {
     const categories = {};
     const uncategorizedItems = [];
+    const singleItems = []; // To collect single item categories
     const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-
     if (!listContainer) return;
 
-    // Find all <ol> elements that need to be categorized
     const originalOlLists = listContainer.querySelectorAll('ol');
-    const olListsToCategorize = Array.from(originalOlLists).slice(1); // Skip first <ol> if needed
+    const olListsToCategorize = Array.from(originalOlLists).slice(1);
 
-    // Track already processed items to avoid duplicates
+    // Clear processedItems set to reflect the latest DOM structure
     const processedItems = new Set();
-    const wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+    let wordColors = {};
+
+    try {
+        wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+    } catch (e) {
+        console.error("Error parsing wordColors from localStorage:", e);
+    }
 
     olListsToCategorize.forEach((ol) => {
         const listItems = ol.querySelectorAll('li');
@@ -93,42 +146,83 @@ function sortLists() {
             if (processedItems.has(item)) return;
 
             const category = item.getAttribute('data-category');
+            const dateStr = item.getAttribute('data-date');
+            const date = dateStr ? new Date(dateStr) : null;
 
             if (category) {
                 if (!categories[category]) categories[category] = [];
-                categories[category].push(item);
+                categories[category].push({ item, date });
             } else {
-                uncategorizedItems.push(item);
+                uncategorizedItems.push({ item, date });
             }
 
-            // Mark the original item as processed
             processedItems.add(item);
         });
+    });
+
+    // Sort items within categories by date (ascending order)
+    for (const category in categories) {
+        categories[category].sort((a, b) => {
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return a.date - b.date;
+        });
+    }
+
+    // Sort uncategorized items by date
+    uncategorizedItems.sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date - b.date;
     });
 
     // Create a document fragment to hold new categorized <ol> elements
     const fragment = document.createDocumentFragment();
 
-    // Create new <ol> elements for each category and add categorized items
-    for (const category in categories) {
-        const newOlContainer = createCategoryContainer(category, categories[category], wordColors[category]);
-        fragment.appendChild(newOlContainer);
-    }
-
-    // Create an "Uncategorized" <ol> for items that didn't match any category
+    // Create "Uncategorized" section first
     if (uncategorizedItems.length > 0) {
-        const uncategorizedOlContainer = createCategoryContainer('Uncategorized', uncategorizedItems);
+        const uncategorizedOlContainer = createCategoryContainer('Uncategorized', uncategorizedItems.map(itemObj => itemObj.item));
         fragment.appendChild(uncategorizedOlContainer);
     }
+
+    // Separate out single-item categories
+    const sortedCategories = [];
+    for (const category in categories) {
+        if (categories[category].length === 1) {
+            singleItems.push(...categories[category]);
+        } else {
+            // Store categories along with the earliest date in their items
+            const earliestDate = categories[category][0].date;
+            sortedCategories.push({ category, items: categories[category].map(itemObj => itemObj.item), earliestDate });
+        }
+    }
+
+    // Create a "Single Items" section for all single-item categories
+    if (singleItems.length > 0) {
+        const singleItemsOlContainer = createCategoryContainer('Single Items', singleItems.map(itemObj => itemObj.item));
+        fragment.appendChild(singleItemsOlContainer);
+    }
+
+    // Sort categories by the earliest date among their items
+    sortedCategories.sort((a, b) => {
+        if (!a.earliestDate) return 1;
+        if (!b.earliestDate) return -1;
+        return a.earliestDate - b.earliestDate;
+    });
+
+    // Create categorized lists based on sorted categories
+    sortedCategories.forEach(({ category, items }) => {
+        const newOlContainer = createCategoryContainer(category, items, wordColors[category]);
+        fragment.appendChild(newOlContainer);
+    });
 
     // Clear all existing <ol> elements from the container, except the first one
     listContainer.querySelectorAll('ol').forEach((ol, index) => {
         if (index > 0) {
-            ol.parentElement.remove();
+            ol.parentElement?.remove();
         }
     });
 
-    // Append the new organized <ol> elements to the list container
     listContainer.appendChild(fragment);
 
     // Reinitialize button listeners and dropdowns after sorting
@@ -143,21 +237,66 @@ function createCategoryContainer(category, items, color) {
     const categoryHeader = document.createElement('h3');
     categoryHeader.className =
         'sticky bg-token-sidebar-surface-primary top-0 z-20 flex h-9 items-center px-2 text-xs font-semibold text-ellipsis overflow-hidden break-all pt-3 pb-2 text-token-text-primary';
-    categoryHeader.textContent = `Category: ${category}`;
+    categoryHeader.textContent = `${category}`;
 
-    // Set the color if available
     if (color) {
         categoryHeader.style.color = color;
         categoryHeader.style.border = `1px dotted ${color}`;
     }
 
+    // Add collapsibility to the category header
+    const collapseIcon = document.createElement('span');
+    collapseIcon.textContent = '[+]'; // Default to collapsed state
+    collapseIcon.style.marginRight = '10px';
+    collapseIcon.style.cursor = 'pointer';
+
+    categoryHeader.prepend(collapseIcon);
+    categoryHeader.style.cursor = 'pointer';
+
+    // Toggle collapse/expand on click
+    categoryHeader.addEventListener('click', () => {
+        if (newOl.style.display === 'none') {
+            newOl.style.display = 'block';
+            collapseIcon.textContent = '[-]';
+        } else {
+            newOl.style.display = 'none';
+            collapseIcon.textContent = '[+]';
+        }
+    });
+
     newOlContainer.appendChild(categoryHeader);
 
     const newOl = document.createElement('ol');
-    items.forEach((item) => newOl.appendChild(item));
+    newOl.style.display = 'none'; // Default to collapsed
+    items.forEach((item) => {
+        if (document.body.contains(item)) { // Check if item is still in DOM
+            newOl.appendChild(item);
+        }
+    });
     newOlContainer.appendChild(newOl);
 
     return newOlContainer;
+}
+
+// Function to prioritize today categories
+function prioritizeTodayCategories(categories) {
+    const todayCategories = ['Category1', 'Category2']; // Define specific categories that should be prioritized
+    const sortedCategories = {};
+
+    // First, add all "today" categories in the defined order
+    todayCategories.forEach((category) => {
+        if (categories[category]) {
+            sortedCategories[category] = categories[category];
+            delete categories[category];
+        }
+    });
+
+    // Then, add the remaining categories in their original order
+    for (const category in categories) {
+        sortedCategories[category] = categories[category];
+    }
+
+    return sortedCategories;
 }
 
 
@@ -166,29 +305,19 @@ function initializeButtonClickListeners() {
     if (!listContainer) return;
 
     listContainer.addEventListener('click', (event) => {
-        // Check if the clicked element is a button or inside a button
         const button = event.target.closest('button');
         if (button) {
-            // Handle button click
             handleButtonClick(button);
         }
     });
 }
 
 function handleButtonClick(button) {
-    // Custom logic for button click
     console.log(`Button with ID ${button.id} was clicked!`);
-    // You can add more functionality here as needed
 }
 
 function reinitializeDropdowns() {
-    // Assuming the dropdown library needs to be reinitialized after DOM changes.
-    // If you are using a library like Radix or similar, you need to re-run their initialization methods here.
-    // This part is dependent on the specific dropdown library you use.
-
-    // Example for reinitializing dropdowns:
     document.querySelectorAll('[data-radix-menu-content]').forEach(dropdown => {
-        // Custom initialization logic or library-specific re-attach logic
-        // Placeholder code; adjust according to your dropdown/popup library
+        // Custom initialization or reattachment logic as needed by the dropdown library
     });
 }
