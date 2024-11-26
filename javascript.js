@@ -1,10 +1,83 @@
+localStorage.setItem('offset', 0); // Keep nextOffset in sync with localStorage
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Retrieve offset from localStorage or default to 0
+  offset = parseInt(localStorage.getItem('offset'), 10) || 0;
+  nextOffset = offset; // Ensure nextOffset matches the current offset
+
+
   repeater();
   initializeMutationObserver();
   initializeButtonClickListeners();
   // Initial load
   fetchConversations().then(preloadNextPage);
 });
+
+
+let offset = 0;
+let nextOffset = 0;
+const limit = 28; // Matches API's default
+const order = 'updated';
+let isLoading = false;
+let toggleMultiplier = true; // Toggle between behaviors
+
+async function fetchConversations() {
+    if (isLoading) return; // Prevent duplicate calls
+    isLoading = true;
+
+    try {
+        // Calculate the offset for the current call
+        const response = await fetch(`/backend-api/conversations?offset=${offset}&limit=${limit}&order=${order}`);
+        if (!response.ok) throw new Error('Failed to fetch conversations');
+        const data = await response.json();
+
+        if (data){
+          updateUIWithConversations(data);
+        } // Append fetched data to the UI
+
+            offset += limit; // Increment the offset
+      localStorage.setItem('offset', offset); // Save updated offset to localStorage
+
+
+        isLoading = false;
+    } catch (error) {
+        console.error("Error fetching conversations:", error);
+        isLoading = false;
+    }
+}
+
+function updateUIWithConversations(conversations) {
+    const container = document.querySelector('#conversations-container');
+    if (conversations) {
+      conversations.forEach((conversation) => {
+        const div = document.createElement('div');
+        div.className = 'conversation';
+        div.textContent = conversation.title; // Replace with appropriate field
+        container.appendChild(div);
+    });
+      
+    }
+}
+
+// Infinite scrolling logic
+window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+        fetchConversations().then(preloadNextPage);
+    }
+});
+
+async function preloadNextPage() {
+  try {
+    const data = await fetch(`/backend-api/conversations?offset=${nextOffset}&limit=${limit}&order=${order}`).then(res => res.json());
+    if (data) {
+     updateUIWithConversations(data);
+    }
+  } catch (error) {
+    console.error("Error preloading conversations:", error);
+  }
+  nextOffset = offset + limit;
+  localStorage.setItem('offset', offset); // Keep nextOffset in sync with localStorage
+}
 
 function initializeMutationObserver() {
   const targetNode = document.querySelector(
@@ -53,7 +126,6 @@ function repeater() {
   const firstSort = setInterval(() => {
     try {
       sortLists();
-      fetchConversations().then(preloadNextPage);
     } catch (e) {
       console.error('Error in sortLists interval:', e);
     }
@@ -77,7 +149,7 @@ function repeater() {
     setInterval(() => {
       try {
         sortLists();
-        fetchConversations().then(preloadNextPage);
+        preloadNextPage();
       } catch (e) {
         console.error('Error in sortLists interval after timeout:', e);
       }
@@ -372,67 +444,4 @@ function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
     // Custom initialization or reattachment logic as needed by the dropdown library
   });
-}
-
-let offset = 0;
-const limit = 28; // Matches API's default
-const order = 'updated';
-let isLoading = false;
-let toggleMultiplier = true; // Toggle between behaviors
-
-async function fetchConversations() {
-  if (isLoading) return; // Prevent duplicate calls
-  isLoading = true;
-
-  try {
-    // Calculate the offset for the current call
-    const effectiveOffset = toggleMultiplier ? offset : offset + limit;
-    const response = await fetch(
-      `/backend-api/conversations?offset=${effectiveOffset}&limit=${limit}&order=${order}`
-    );
-    if (!response.ok) throw new Error('Failed to fetch conversations');
-    const data = await response.json();
-
-    updateUIWithConversations(data); // Append fetched data to the UI
-
-    // Update offset only if toggleMultiplier is true to prevent skipping base offset
-    if (toggleMultiplier) {
-      offset += limit; // Increment the offset
-    }
-
-    toggleMultiplier = !toggleMultiplier; // Toggle the behavior
-    isLoading = false;
-  } catch (error) {
-    console.error('Error fetching conversations:', error);
-    isLoading = false;
-  }
-}
-
-function updateUIWithConversations(conversations) {
-  const container = document.querySelector('#conversations-container');
-  conversations.forEach((conversation) => {
-    const div = document.createElement('div');
-    div.className = 'conversation';
-    div.textContent = conversation.title; // Replace with appropriate field
-    container.appendChild(div);
-  });
-}
-
-// Infinite scrolling logic
-window.addEventListener('scroll', () => {
-  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-    fetchConversations().then(preloadNextPage);
-  }
-});
-
-async function preloadNextPage() {
-  const nextOffset = offset + limit;
-  try {
-    const data = await fetch(
-      `/backend-api/conversations?offset=${nextOffset}&limit=${limit}&order=${order}`
-    ).then((res) => res.json());
-    cache[nextOffset] = data; // Store in a cache for later use
-  } catch (error) {
-    console.error('Error preloading conversations:', error);
-  }
 }
