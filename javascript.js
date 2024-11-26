@@ -1,76 +1,81 @@
 localStorage.setItem('offset', 0); // Keep nextOffset in sync with localStorage
 
+let isScriptRunning = false;
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Retrieve offset from localStorage or default to 0
-  offset = parseInt(localStorage.getItem('offset'), 10) || 0;
-  nextOffset = offset; // Ensure nextOffset matches the current offset
+  if (isScriptRunning) {
+    return; // Exit if the script is already running
+  }
 
-
-  repeater();
-  initializeMutationObserver();
-  initializeButtonClickListeners();
-  // Initial load
-  fetchConversations().then(preloadNextPage);
+  isScriptRunning = true; // Set the lock
+  try {
+    // Initial load
+    offset = parseInt(localStorage.getItem('offset'), 10) || 0;
+    nextOffset = offset;
+    repeater();
+    addCustomCSS();
+    initializeMutationObserver();
+    initializeButtonClickListeners();
+    fetchConversations().then(preloadNextPage);
+  } finally {
+    isScriptRunning = false; // Release the lock when done
+  }
 });
-
 
 let offset = 0;
 let nextOffset = 0;
 const limit = 28; // Matches API's default
 const order = 'updated';
 let isLoading = false;
-let toggleMultiplier = true; // Toggle between behaviors
 
 async function fetchConversations() {
-    if (isLoading) return; // Prevent duplicate calls
-    isLoading = true;
+  if (isLoading) return; // Prevent duplicate calls
+  isLoading = true;
 
-    try {
-        // Calculate the offset for the current call
-        const response = await fetch(`/backend-api/conversations?offset=${offset}&limit=${limit}&order=${order}`);
-        if (!response.ok) throw new Error('Failed to fetch conversations');
-        const data = await response.json();
+  try {
+    // Calculate the offset for the current call
+    const response = await fetch(`/backend-api/conversations?offset=${offset}&limit=${limit}&order=${order}`);
+    if (!response.ok) throw new Error('Failed to fetch conversations');
+    const data = await response.json();
 
-        if (data){
-          updateUIWithConversations(data);
-        } // Append fetched data to the UI
+    if (data){
+      updateUIWithConversations(data);
+    } // Append fetched data to the UI
 
-            offset += limit; // Increment the offset
-      localStorage.setItem('offset', offset); // Save updated offset to localStorage
+    offset += limit; // Increment the offset
+    localStorage.setItem('offset', offset); // Save updated offset to localStorage
 
-
-        isLoading = false;
-    } catch (error) {
-        console.error("Error fetching conversations:", error);
-        isLoading = false;
-    }
+    isLoading = false;
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+    isLoading = false;
+  }
 }
 
 function updateUIWithConversations(conversations) {
-    const container = document.querySelector('#conversations-container');
-    if (conversations) {
-      conversations.forEach((conversation) => {
-        const div = document.createElement('div');
-        div.className = 'conversation';
-        div.textContent = conversation.title; // Replace with appropriate field
-        container.appendChild(div);
+  const container = document.querySelector('#conversations-container');
+  if (conversations) {
+    conversations.forEach((conversation) => {
+      const div = document.createElement('div');
+      div.className = 'conversation';
+      div.textContent = conversation.title; // Replace with appropriate field
+      container.appendChild(div);
     });
-      
-    }
+  }
 }
 
 // Infinite scrolling logic
 window.addEventListener('scroll', () => {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-        fetchConversations().then(preloadNextPage);
-    }
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+    fetchConversations().then(preloadNextPage);
+  }
 });
 
 async function preloadNextPage() {
   try {
     const data = await fetch(`/backend-api/conversations?offset=${nextOffset}&limit=${limit}&order=${order}`).then(res => res.json());
     if (data) {
-     updateUIWithConversations(data);
+      updateUIWithConversations(data);
     }
   } catch (error) {
     console.error("Error preloading conversations:", error);
@@ -370,42 +375,44 @@ function createCategoryContainer(category, items, color) {
 
   // Add collapsibility to the category header
   const collapseIcon = document.createElement('span');
-  collapseIcon.textContent = '[+]'; // Default to collapsed state
+  const isCollapsed = JSON.parse(localStorage.getItem(`categoryState_${category}`)) === undefined
+    ? localStorage.setItem(`categoryState_${category}`, JSON.stringify(false))
+    : JSON.parse(localStorage.getItem(`categoryState_${category}`));
+  collapseIcon.textContent = isCollapsed ? '[+]' : '[-]';
   collapseIcon.style.marginRight = '10px';
   collapseIcon.style.cursor = 'pointer';
 
   categoryHeader.prepend(collapseIcon);
   categoryHeader.style.cursor = 'pointer';
-
-  // Toggle collapse/expand on click
-  categoryHeader.addEventListener('click', () => {
-    if (newOl.style.display === 'none') {
-      newOl.style.display = 'block';
-      collapseIcon.textContent = '[-]';
-    } else {
-      newOl.style.display = 'none';
-      collapseIcon.textContent = '[+]';
-    }
-  });
-
   newOlContainer.appendChild(categoryHeader);
-
   const newOl = document.createElement('ol');
-  newOl.style.display = 'none'; // Default to collapsed
+  newOl.style.display = isCollapsed ? 'none' : 'block';
   items.forEach((item) => {
     if (document.body.contains(item)) {
       // Check if item is still in DOM
       newOl.appendChild(item);
     }
   });
-  newOlContainer.appendChild(newOl);
 
+  // Toggle collapse/expand on click
+  categoryHeader.addEventListener('click', () => {
+    if (newOl.style.display === 'none') {
+      newOl.style.display = 'block';
+      collapseIcon.textContent = '[-]';
+      localStorage.setItem(`categoryState_${category}`, JSON.stringify(false));
+    } else {
+      newOl.style.display = 'none';
+      collapseIcon.textContent = '[+]';
+      localStorage.setItem(`categoryState_${category}`, JSON.stringify(true));
+    }
+  });
+  newOlContainer.appendChild(newOl);
   return newOlContainer;
 }
 
 // Function to prioritize today categories
 function prioritizeTodayCategories(categories) {
-  const todayCategories = ['Category1', 'Category2']; // Define specific categories that should be prioritized
+  const todayCategories = ['Æther', 'Æ', 'ω']; // Define specific categories that should be prioritized
   const sortedCategories = {};
 
   // First, add all "today" categories in the defined order
@@ -444,4 +451,190 @@ function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
     // Custom initialization or reattachment logic as needed by the dropdown library
   });
+}
+
+function addCustomCSS() {
+  // Create a <style> element
+  const style = document.createElement('style');
+  style.type = 'text/css';
+
+  // Define your CSS code as a string ---> Same scss as found in the separate styling.scss
+  const css = `
+      /* Set the body or main container to 100% width */
+      body, html {
+      	width: 100%;
+      }
+      
+      ol {
+          transition: height 0.3s ease, opacity 0.3s ease;
+          overflow: hidden;
+      }
+      
+      /* Target the chat container and force it to occupy the full width */
+      .mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
+      	width: 90% !important;
+      	max-width: 90% !important;
+      	min-width: 90% !important;
+      	padding: 0;
+      }
+      
+      h3 {
+      	width: 90% !important;
+      	padding: .5rem 1rem !important;
+        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+      	border: 1px dotted ;
+        line-height: .5rem;
+      	background-color: #202;
+      }
+      
+      h4 {
+      	color: #64edd3;
+      	width: 90% !important;
+      	border: 1px dotted #fff;
+      	padding: .5rem 1rem !important;
+      	line-height: .5rem;
+      	margin: 0;
+      	background-color: #202;
+        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+      }
+      
+      div.relative.mt-5 {
+      	h3 {
+          	width: 90% !important;
+          	padding: .25rem 1rem !important;
+            box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+            line-height: .5rem;
+          	background-color: #202;
+      	}
+      }
+      
+      .flex-row-reverse {
+      	flex-direction: row;
+      }
+      
+      .mr-1 .rounded-xl .items-center .text-sm {
+      	color: #f0f;
+      	font-size: 1.25rem;
+      	line-height: 1rem;
+      	border-color: #f0f;
+      }
+      
+      .mr-1 .rounded-xl .items-center {
+      	color: #f0f;
+      	border-color: #f0f;
+      }
+      
+      .rounded-xl .items-center {
+      	color: #f0f;
+      	border-color: #f0f;
+      }
+      
+      .highlighted {
+      	padding: 3px;
+      	margin: -7px 0;
+      	font-weight: bold !important; /* Optionally make it bold */
+      }
+      
+      .p-2 {
+      	padding: 0.25rem;
+      }
+      
+      .text-sm {
+      	font-size: 0.75rem;
+      	line-height: 1rem;
+      }
+      
+      .mx-auto {
+      	// Center the container
+      	margin-left: auto;
+      	margin-right: auto;
+      }
+      
+      .flex {
+      	display: flex;
+      }
+      
+      .flex-1 {
+      	flex: 1; // Make the container take up available space
+      }
+      
+      .gap-4 {
+      	gap: 1rem; // You can tweak this if needed
+      }
+      
+      .md\:gap-5 {
+      	@media (min-width: 768px) {
+      		gap: 1.25rem;
+      	}
+      }
+      
+      .lg\:gap-6 {
+      	@media (min-width: 1024px) {
+      		gap: 1.5rem;
+      	}
+      }
+      
+      .md\:max-w-3xl,
+      .lg\:max-w-\[40rem\],
+      .xl\:max-w-\[48rem\] {
+      	// Remove restrictive maximum widths for wider display
+      	@media (min-width: 768px) {
+      		max-width: 90%;
+      	}
+      }
+      
+      // Ensure the container always takes 90% of the available width
+      .group\/conversation-turn {
+      	width: 90%;
+      	margin-left: auto;
+      	margin-right: auto;
+      }
+      
+      // Other layout tweaks to ensure consistent appearance
+      .flex-shrink-0 {
+      	flex-shrink: 0;
+      }
+      
+      .min-w-0 {
+      	min-width: 0;
+      }
+      
+      .items-end {
+      	align-items: flex-end;
+      }
+      
+      // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
+      .gizmo-bot-avatar {
+      	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
+      }
+      
+      // Any additional rules to override padding/margin if necessary
+      .p-1 {
+      	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
+      }
+      
+      //._main_5jn6z_1 {
+      //    width: 90% !important;  // Or any desired width value
+      //}
+      
+      .custom-width {
+          width: 90% !important;  // Or any desired value
+      }
+      
+      
+      .mt-5 {
+          margin: 0;
+      }
+    `;
+
+  // Add the CSS code to the <style> element
+  if (style.styleSheet) {
+    // This is for IE support (IE < 9)
+    style.styleSheet.cssText = css;
+  } else {
+    style.appendChild(document.createTextNode(css));
+  }
+
+  // Append the <style> element to the document <head>
+  document.head.appendChild(style);
 }
