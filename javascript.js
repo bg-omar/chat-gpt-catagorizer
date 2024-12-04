@@ -1,138 +1,59 @@
-localStorage.setItem('offset', 0); // Keep nextOffset in sync with localStorage
+(function () {
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const [resource, config] = args;
 
-let isScriptRunning = false;
-
-document.addEventListener('DOMContentLoaded', () => {
-  if (isScriptRunning) {
-    return; // Exit if the script is already running
-  }
-
-  isScriptRunning = true; // Set the lock
-  try {
-    // Initial load
-    offset = parseInt(localStorage.getItem('offset'), 10) || 0;
-    nextOffset = offset;
-    repeater();
-    addCustomCSS();
-    initializeMutationObserver();
-    initializeButtonClickListeners();
-    fetchConversations().then(preloadNextPage);
-  } finally {
-    isScriptRunning = false; // Release the lock when done
-  }
-});
-
-let offset = 0;
-let nextOffset = 0;
-const limit = 28; // Matches API's default
-const order = 'updated';
-let isLoading = false;
-
-async function fetchConversations() {
-  if (isLoading) return; // Prevent duplicate calls
-  isLoading = true;
-
-  try {
-    // Calculate the offset for the current call
-    const response = await fetch(`/backend-api/conversations?offset=${offset}&limit=${limit}&order=${order}`);
-    if (!response.ok) throw new Error('Failed to fetch conversations');
-    const data = await response.json();
-
-    if (data){
-      updateUIWithConversations(data);
-    } // Append fetched data to the UI
-
-    offset += limit; // Increment the offset
-    localStorage.setItem('offset', offset); // Save updated offset to localStorage
-
-    isLoading = false;
-  } catch (error) {
-    console.error("Error fetching conversations:", error);
-    isLoading = false;
-  }
-}
-
-function updateUIWithConversations(conversations) {
-  const container = document.querySelector('#conversations-container');
-  if (conversations) {
-    conversations.forEach((conversation) => {
-      const div = document.createElement('div');
-      div.className = 'conversation';
-      div.textContent = conversation.title; // Replace with appropriate field
-      container.appendChild(div);
-    });
-  }
-}
-
-// Infinite scrolling logic
-window.addEventListener('scroll', () => {
-  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-    fetchConversations().then(preloadNextPage);
-  }
-});
-
-async function preloadNextPage() {
-  try {
-    const data = await fetch(`/backend-api/conversations?offset=${nextOffset}&limit=${limit}&order=${order}`).then(res => res.json());
-    if (data) {
-      updateUIWithConversations(data);
-    }
-  } catch (error) {
-    console.error("Error preloading conversations:", error);
-  }
-  nextOffset = offset + limit;
-  localStorage.setItem('offset', offset); // Keep nextOffset in sync with localStorage
-}
-
-function initializeMutationObserver() {
-  const targetNode = document.querySelector(
-    '.relative.grow.overflow-hidden.whitespace-nowrap'
-  );
-  const config = { childList: true, subtree: true, characterData: true };
-
-  const callback = (mutationsList) => {
-    let isObserving = true;
-
-    for (let mutation of mutationsList) {
-      if (
-        (mutation.type === 'childList' || mutation.type === 'characterData') &&
-        isObserving
-      ) {
-        isObserving = false;
-        try {
-          if (document.body.contains(mutation.target)) {
-            // Ensure target exists
-            checkAndReplaceText();
-          }
-        } catch (e) {
-          console.error('Error in mutation callback:', e);
-        } finally {
-          isObserving = true;
+    if (config && config.headers) {// Check if headers is a Headers instance or a plain object
+      let token = null;
+      if (config.headers instanceof Headers) {
+        if (config.headers.has('Authorization')) { // For Headers object
+          const authHeader = config.headers.get('Authorization');
+          if (authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];  
         }
+      } else if (typeof config.headers === 'object') {
+        const authHeader = config.headers['Authorization'];        // For plain object
+        if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
+      }
+      if (token) {
+        console.log("Captured Bearer token from request:", token);
+        sessionStorage.setItem('authToken', token);
       }
     }
-  };
 
-  if (targetNode) {
-    const observer = new MutationObserver(callback);
-    observer.observe(targetNode, config);
-  }
-}
+    const response = await originalFetch(...args);
+    return response;
+  };
+})();
+
+sessionStorage.setItem('apiOffset', 0);
+let apiLimit = 28; // Matches API's default
+let apiOrder = 'updated';
+let isScriptLoading = false;
+let shouldFetchMore = true; // Initially, allow fetching
+
+document.addEventListener('DOMContentLoaded', () => {
+  repeater();
+  initializeMutationObserver();
+  initializeButtonClickListeners();
+});
+
 
 function repeater() {
+  // Set intervals with error handling
   const firstInterval = setInterval(() => {
     try {
       checkAndReplaceText();
     } catch (e) {
-      console.error('Error in checkAndReplaceText interval:', e);
+      console.error("Error in checkAndReplaceText interval:", e);
     }
   }, 1000);
 
   const firstSort = setInterval(() => {
     try {
       sortLists();
+      if (shouldFetchMore) fetchConversations();
     } catch (e) {
-      console.error('Error in sortLists interval:', e);
+      console.error("Error in sortLists interval:", e);
     }
   }, 4500);
 
@@ -143,66 +64,31 @@ function repeater() {
     setInterval(() => {
       try {
         checkAndReplaceText();
-      } catch (e) {
-        console.error(
-          'Error in checkAndReplaceText interval after timeout:',
-          e
-        );
-      }
-    }, 30000);
-
-    setInterval(() => {
-      try {
         sortLists();
-        preloadNextPage();
       } catch (e) {
-        console.error('Error in sortLists interval after timeout:', e);
+        console.error("Error in checkAndReplaceText interval after timeout:", e);
       }
     }, 30000);
-  }, 20000);
+  }, 30000);
 }
 
 function checkAndReplaceText() {
-  const divElements = document.querySelectorAll(
-    '.relative.grow.overflow-hidden.whitespace-nowrap'
-  );
+  const divElements = document.querySelectorAll('.relative.grow.overflow-hidden.whitespace-nowrap');
   if (divElements.length === 0) return;
 
   const colors = [
-    '#f0f',
-    '#FF7E00',
-    '#64edd3',
-    '#0f0',
-    '#3cc',
-    '#ff0',
-    '#f00',
-    '#0ff',
-    '#336699',
-    'gray',
-    'silver',
-    '#CC99FF',
-    '#6633FF',
-    '#66FF99',
-    '#FF6633',
-    '#66CCCC',
-    '#33CC33',
-    'red',
-    'purple',
-    'green',
-    'lime',
-    'olive',
-    'yellow',
-    'blue',
-    'teal',
-    'aqua',
+    '#f0f', '#FF7E00', '#64edd3', '#0f0', '#3cc', '#ff0', '#f00', '#0ff', '#336699',
+    'gray', 'silver', '#CC99FF', '#6633FF', '#66FF99', '#FF6633', '#66CCCC', '#33CC33',
+    'red', 'purple', 'green', 'lime', 'olive', 'yellow', 'blue', 'teal', 'aqua',
   ];
   let colorIndex = 0;
-
   let wordColors = {};
-  try {
-    wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+  let conversations;
+  try { 
+    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+    conversations = managesessionStorage('get') || {};
   } catch (e) {
-    console.error('Error parsing wordColors from localStorage:', e);
+    console.error("Error parsing wordColors from sessionStorage:", e);
     wordColors = {};
   }
 
@@ -210,6 +96,15 @@ function checkAndReplaceText() {
     if (divElement.querySelector('span')) return;
 
     let textContent = divElement.textContent;
+    let date;
+    let id;
+    //console.log(textContent);
+    conversations.forEach((item) => {
+      if (item.title == textContent){
+        date = item.update_time
+        id = item.id
+      }});  
+//   console.log("date: ", date);
     const regex = /\[(.*?)\]/g;
 
     const newText = textContent.replace(regex, (match, word) => {
@@ -223,15 +118,18 @@ function checkAndReplaceText() {
     const match = regex.exec(textContent);
     if (match && match[1]) {
       divElement.closest('li')?.setAttribute('data-category', match[1].trim());
+      divElement.closest('li')?.setAttribute('data-date',date);
+      divElement.closest('li')?.setAttribute('data-id', id);
     }
 
     divElement.innerHTML = newText;
   });
 
+  // Save updated color assignments to sessionStorage
   try {
-    localStorage.setItem('wordColors', JSON.stringify(wordColors));
+    sessionStorage.setItem('wordColors', JSON.stringify(wordColors));
   } catch (e) {
-    console.error('Error saving wordColors to localStorage:', e);
+    console.error("Error saving wordColors to sessionStorage:", e);
   }
 }
 
@@ -243,25 +141,36 @@ function sortLists() {
   if (!listContainer) return;
 
   const originalOlLists = listContainer.querySelectorAll('ol');
-  const olListsToCategorize = Array.from(originalOlLists).slice(1);
+  const olListsToCategorize = Array.from(originalOlLists);
 
   // Clear processedItems set to reflect the latest DOM structure
-  const processedItems = new Set();
+  let processedItems = new Set();
   let wordColors = {};
-
+  let conversations;
   try {
-    wordColors = JSON.parse(localStorage.getItem('wordColors')) || {};
+    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+    getConversations = managesessionStorage('get') || {};
+    conversations = Array.from(getConversations);
   } catch (e) {
-    console.error('Error parsing wordColors from localStorage:', e);
+    console.error('Error parsing wordColors from sessionStorage:', e);
   }
 
+  let totalitems = 0;
+  //console.log("olListsToCategorize: ", olListsToCategorize);
   olListsToCategorize.forEach((ol) => {
+    ol.setAttribute('style', 'display: block;');
+    //console.log("ol: ", ol);
     const listItems = ol.querySelectorAll('li');
     listItems.forEach((item) => {
+      totalitems++
       if (processedItems.has(item)) return;
 
       const category = item.getAttribute('data-category');
       const dateStr = item.getAttribute('data-date');
+      const dataId = item.getAttribute('data-id');
+
+      conversations = removeObjectWithId(conversations, dataId);
+      console.log("conversations: ", conversations.length, dataId);
       const date = dateStr ? new Date(dateStr) : null;
 
       if (category) {
@@ -270,11 +179,44 @@ function sortLists() {
       } else {
         uncategorizedItems.push({ item, date });
       }
-
+      //console.log("item: ", item);
       processedItems.add(item);
     });
   });
+  console.log("totalitems: ", totalitems);
+   let olElement = olListsToCategorize[0];
 
+
+  let orphans = 0;
+  if (conversations && conversations.length > 0) {
+    conversations.forEach((conversation) => {
+      const dateStr = conversation.update_time;
+      const date = dateStr ? new Date(dateStr) : null;
+      orphans++
+      const li = document.createElement('li');
+      li.className = "relative";
+      li.setAttribute("data-testid", `history-item-${orphans}`);
+      //li.setAttribute("data-category", `Uncategorized`);
+      li.setAttribute("data-date", date);
+      li.setAttribute("data-id", `${conversation.id}`);
+  
+      li.innerHTML = `
+        <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
+          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
+            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
+              ${conversation.title}
+            </div>
+          </a>
+        </div>
+      `;
+      
+      //console.log("li: ", li);
+      olElement.appendChild(li);
+      processedItems.add(li);
+    });
+  }
+  console.log("orphan item: ", orphans);
+   console.log("uncategorizedItems: ", uncategorizedItems);
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
     categories[category].sort((a, b) => {
@@ -285,11 +227,11 @@ function sortLists() {
   }
 
   // Sort uncategorized items by date
-  uncategorizedItems.sort((a, b) => {
-    if (!a.date) return 1;
-    if (!b.date) return -1;
-    return a.date - b.date;
-  });
+  // uncategorizedItems.sort((a, b) => {
+  //   if (!a.date) return 1;
+  //   if (!b.date) return -1;
+  //   return a.date - b.date;
+  // });
 
   // Create a document fragment to hold new categorized <ol> elements
   const fragment = document.createDocumentFragment();
@@ -375,9 +317,10 @@ function createCategoryContainer(category, items, color) {
 
   // Add collapsibility to the category header
   const collapseIcon = document.createElement('span');
-  const isCollapsed = JSON.parse(localStorage.getItem(`categoryState_${category}`)) === undefined
-    ? localStorage.setItem(`categoryState_${category}`, JSON.stringify(false))
-    : JSON.parse(localStorage.getItem(`categoryState_${category}`));
+  let isCollapsed = true;
+  JSON.parse(localStorage.getItem(`categoryState_${category}`)) === undefined
+    ? localStorage.setItem(`categoryState_${category}`, JSON.stringify(true))
+    : isCollapsed = JSON.parse(localStorage.getItem(`categoryState_${category}`));
   collapseIcon.textContent = isCollapsed ? '[+]' : '[-]';
   collapseIcon.style.marginRight = '10px';
   collapseIcon.style.cursor = 'pointer';
@@ -410,25 +353,32 @@ function createCategoryContainer(category, items, color) {
   return newOlContainer;
 }
 
-// Function to prioritize today categories
-function prioritizeTodayCategories(categories) {
-  const todayCategories = ['Æther', 'Æ', 'ω']; // Define specific categories that should be prioritized
-  const sortedCategories = {};
+function initializeMutationObserver() {
+  const targetNode = document.querySelector('.relative.grow.overflow-hidden.whitespace-nowrap');
+  const config = { childList: true, subtree: true, characterData: true };
 
-  // First, add all "today" categories in the defined order
-  todayCategories.forEach((category) => {
-    if (categories[category]) {
-      sortedCategories[category] = categories[category];
-      delete categories[category];
+  const callback = (mutationsList) => {
+    // Use a flag to prevent recursive triggering of the observer
+    let isObserving = true;
+
+    for (let mutation of mutationsList) {
+      if ((mutation.type === 'childList' || mutation.type === 'characterData') && isObserving) {
+        isObserving = false;
+        try {
+          checkAndReplaceText();
+        } catch (e) {
+          console.error("Error in mutation callback:", e);
+        } finally {
+          isObserving = true;
+        }
+      }
     }
-  });
+  };
 
-  // Then, add the remaining categories in their original order
-  for (const category in categories) {
-    sortedCategories[category] = categories[category];
+  if (targetNode) {
+    const observer = new MutationObserver(callback);
+    observer.observe(targetNode, config);
   }
-
-  return sortedCategories;
 }
 
 function initializeButtonClickListeners() {
@@ -445,196 +395,106 @@ function initializeButtonClickListeners() {
 
 function handleButtonClick(button) {
   console.log(`Button with ID ${button.id} was clicked!`);
+  // Additional functionality can be added here
 }
 
 function reinitializeDropdowns() {
-  document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
+  document.querySelectorAll('[data-radix-menu-content]').forEach(dropdown => {
     // Custom initialization or reattachment logic as needed by the dropdown library
   });
 }
 
-function addCustomCSS() {
-  // Create a <style> element
-  const style = document.createElement('style');
-  style.type = 'text/css';
+async function fetchConversations() {
+  console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
+  if (isScriptLoading) return;
+  isScriptLoading = true;
 
-  // Define your CSS code as a string ---> Same scss as found in the separate styling.scss
-  const css = `
-      /* Set the body or main container to 100% width */
-      body, html {
-      	width: 100%;
-      }
-      
-      ol {
-          transition: height 0.3s ease, opacity 0.3s ease;
-          overflow: hidden;
-      }
-      
-      /* Target the chat container and force it to occupy the full width */
-      .mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
-      	width: 90% !important;
-      	max-width: 90% !important;
-      	min-width: 90% !important;
-      	padding: 0;
-      }
-      
-      h3 {
-      	width: 90% !important;
-      	padding: .5rem 1rem !important;
-        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      	border: 1px dotted ;
-        line-height: .5rem;
-      	background-color: #202;
-      }
-      
-      h4 {
-      	color: #64edd3;
-      	width: 90% !important;
-      	border: 1px dotted #fff;
-      	padding: .5rem 1rem !important;
-      	line-height: .5rem;
-      	margin: 0;
-      	background-color: #202;
-        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      }
-      
-      div.relative.mt-5 {
-      	h3 {
-          	width: 90% !important;
-          	padding: .25rem 1rem !important;
-            box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-            line-height: .5rem;
-          	background-color: #202;
-      	}
-      }
-      
-      .flex-row-reverse {
-      	flex-direction: row;
-      }
-      
-      .mr-1 .rounded-xl .items-center .text-sm {
-      	color: #f0f;
-      	font-size: 1.25rem;
-      	line-height: 1rem;
-      	border-color: #f0f;
-      }
-      
-      .mr-1 .rounded-xl .items-center {
-      	color: #f0f;
-      	border-color: #f0f;
-      }
-      
-      .rounded-xl .items-center {
-      	color: #f0f;
-      	border-color: #f0f;
-      }
-      
-      .highlighted {
-      	padding: 3px;
-      	margin: -7px 0;
-      	font-weight: bold !important; /* Optionally make it bold */
-      }
-      
-      .p-2 {
-      	padding: 0.25rem;
-      }
-      
-      .text-sm {
-      	font-size: 0.75rem;
-      	line-height: 1rem;
-      }
-      
-      .mx-auto {
-      	// Center the container
-      	margin-left: auto;
-      	margin-right: auto;
-      }
-      
-      .flex {
-      	display: flex;
-      }
-      
-      .flex-1 {
-      	flex: 1; // Make the container take up available space
-      }
-      
-      .gap-4 {
-      	gap: 1rem; // You can tweak this if needed
-      }
-      
-      .md\:gap-5 {
-      	@media (min-width: 768px) {
-      		gap: 1.25rem;
-      	}
-      }
-      
-      .lg\:gap-6 {
-      	@media (min-width: 1024px) {
-      		gap: 1.5rem;
-      	}
-      }
-      
-      .md\:max-w-3xl,
-      .lg\:max-w-\[40rem\],
-      .xl\:max-w-\[48rem\] {
-      	// Remove restrictive maximum widths for wider display
-      	@media (min-width: 768px) {
-      		max-width: 90%;
-      	}
-      }
-      
-      // Ensure the container always takes 90% of the available width
-      .group\/conversation-turn {
-      	width: 90%;
-      	margin-left: auto;
-      	margin-right: auto;
-      }
-      
-      // Other layout tweaks to ensure consistent appearance
-      .flex-shrink-0 {
-      	flex-shrink: 0;
-      }
-      
-      .min-w-0 {
-      	min-width: 0;
-      }
-      
-      .items-end {
-      	align-items: flex-end;
-      }
-      
-      // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
-      .gizmo-bot-avatar {
-      	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
-      }
-      
-      // Any additional rules to override padding/margin if necessary
-      .p-1 {
-      	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
-      }
-      
-      //._main_5jn6z_1 {
-      //    width: 90% !important;  // Or any desired width value
-      //}
-      
-      .custom-width {
-          width: 90% !important;  // Or any desired value
-      }
-      
-      
-      .mt-5 {
-          margin: 0;
-      }
-    `;
+  try {
+    let updatedConversations = [];
 
-  // Add the CSS code to the <style> element
-  if (style.styleSheet) {
-    // This is for IE support (IE < 9)
-    style.styleSheet.cssText = css;
-  } else {
-    style.appendChild(document.createTextNode(css));
+    if (shouldFetchMore) {
+      apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
+      console.log('apiOffset : ', apiOffset);
+
+      const token = sessionStorage.getItem('authToken');    // Retrieve the token from local storage
+      if (!token) throw new Error('Bearer token not found');
+
+      const response = await fetch(`/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`, {  headers: {'Authorization': `Bearer ${token}`}  });     // Add Authorization header and make the API call
+
+      if (!response.ok) throw new Error('Failed to fetch conversations');
+      const data = await response.json();
+      apiOffset += apiLimit;
+
+      sessionStorage.setItem('apiOffset', apiOffset);
+      updatedConversations = mergeAndCleanConversations(managesessionStorage('get'), data.items);
+      managesessionStorage('set', updatedConversations);
+      
+      if (apiOffset >= data.total) {
+        shouldFetchMore = false;
+        console.log("All conversations have been fetched.");
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+  } finally {
+    isScriptLoading = false; // Ensure it's reset regardless of success or failure
   }
+}
 
-  // Append the <style> element to the document <head>
-  document.head.appendChild(style);
+// Helper function to manage local storage
+function managesessionStorage(action, conversations = []) {
+  const storageKey = 'conversations';
+  if (action === 'get') {
+    return JSON.parse(sessionStorage.getItem(storageKey)) || [];
+  } else if (action === 'set') {
+    sessionStorage.setItem(storageKey, JSON.stringify(conversations));
+  }
+}
+
+// Helper function to merge and clean conversations (removes duplicates)
+function mergeAndCleanConversations(existingConversations, newConversations) {
+  const combinedConversations = [...existingConversations, ...newConversations];
+  return removeDuplicates(combinedConversations);
+}
+
+// Helper function to remove duplicates based on the conversation ID
+function removeDuplicates(conversations) {
+  const uniqueConversations = [];
+  const seenIds = new Set();
+
+  conversations.forEach((conversation) => {
+    if (!seenIds.has(conversation.id)) {
+      seenIds.add(conversation.id);
+      uniqueConversations.push(conversation);
+    }
+  });
+
+  return uniqueConversations;
+}
+
+function removeObjectWithId(arr, id) {
+  const arrCopy = Array.from(arr);
+  const objWithIdIndex = arrCopy.findIndex((obj) => obj.id === id);
+  arrCopy.splice(objWithIdIndex, 1);
+  return arrCopy;
+}
+
+function removeItemOnce(arr, value) {
+  var index = arr.indexOf(value);
+  if (index > -1) {
+    arr.splice(index, 1);
+  }
+  return arr;
+}
+
+function removeItemAll(arr, value) {
+  var i = 0;
+  while (i < arr.length) {
+    if (arr[i] === value) {
+      arr.splice(i, 1);
+    } else {
+      ++i;
+    }
+  }
+  return arr;
 }
