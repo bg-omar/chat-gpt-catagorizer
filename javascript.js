@@ -26,7 +26,7 @@
 })();
 
 sessionStorage.setItem('apiOffset', 0);
-let apiLimit = 28; // Matches API's default
+let apiLimit = 56; // Matches API's default
 let apiOrder = 'updated';
 let isScriptLoading = false;
 let shouldFetchMore = true; // Initially, allow fetching
@@ -63,8 +63,8 @@ function repeater() {
       } catch (e) {
         console.error("Error in checkAndReplaceText interval after timeout:", e);
       }
-    }, 30000);
-  }, 30000);
+    }, 10000);
+  }, 10000);
 }
 
 function checkAndReplaceText()  {
