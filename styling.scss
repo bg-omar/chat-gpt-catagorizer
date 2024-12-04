@@ -1,178 +1,181 @@
 /* Set the body or main container to 100% width */
-body,
-html {
-	width: 100%;
-}
+      body, html {
+      	width: 100%;
+      }
 
-ol {
-    transition: height 0.3s ease, opacity 0.3s ease;
-    overflow: hidden;
-}
+      ol {
+          transition: height 0.3s ease, opacity 0.3s ease;
+          overflow: hidden;
+      }
 
-/* Target the chat container and force it to occupy the full width */
-.mx-auto,
-.flex,
-.flex-1,
-.gap-4,
-.text-base,
-.md,
-.lg:gap-6,
-.md,
-.lg,
-.xl,
-.lg,
-.w-full,
-.mx-auto {
-	width: 90% !important;
-	max-width: 90% !important;
-	min-width: 90% !important;
-	padding: 0;
-}
+      /* Target the chat container and force it to occupy the full width */
+      .mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
+      	width: 90% !important;
+      	max-width: 90% !important;
+      	min-width: 90% !important;
+      	padding: 0;
+      }
 
-h3 {
-	width: 90% !important;
-	padding: .5rem 1rem !important;
-  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-	border: 1px dotted ;
-  line-height: .5rem;
-	background-color: #202;
-}
+      h3 {
+      	width: 90% !important;
+      	padding: .5rem 1rem !important;
+        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+      	border: 1px dotted ;
+        line-height: .5rem;
+      	background-color: #202;
+      }
 
-h4 {
-	color: #64edd3;
-	width: 90% !important;
-	border: 1px dotted #fff;
-	padding: .5rem 1rem !important;
-	line-height: .5rem;
-	margin: 0;
-	background-color: #202;
-  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-}
+      h4 {
+      	color: #64edd3;
+      	width: 90% !important;
+      	border: 1px dotted #fff;
+      	padding: .5rem 1rem !important;
+      	line-height: .5rem;
+      	margin: 0;
+      	background-color: #202;
+        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+      }
 
-div.relative.mt-5 {
-	h3 {
-    	width: 90% !important;
-    	padding: .25rem 1rem !important;
-      box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      line-height: .5rem;
-    	background-color: #202;
-	}
-}
+			.max-w-6xl {
+			    max-width: 95%;
+			}
 
-.flex-row-reverse {
-	flex-direction: row;
-}
+			.prose :where(hr):not(:where(.not-prose)) {
+			    border-top-width: 1px;
+			    margin-bottom: .25em;
+			    margin-top: .25em;
+			}
+			
+			.katex-display {
+			    display: block;
+			    margin: 0.25em 0;
+			    text-align: center;
+			}
+			
+      div.relative.mt-5 {
+      	h3 {
+          	width: 90% !important;
+          	padding: .25rem 1rem !important;
+            box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+            line-height: .5rem;
+          	background-color: #202;
+      	}
+      }
 
-.mr-1 .rounded-xl .items-center .text-sm {
-	color: #f0f;
-	font-size: 1.25rem;
-	line-height: 1rem;
-	border-color: #f0f;
-}
+      .flex-row-reverse {
+      	flex-direction: row;
+      }
 
-.mr-1 .rounded-xl .items-center {
-	color: #f0f;
-	border-color: #f0f;
-}
+      .mr-1 .rounded-xl .items-center .text-sm {
+      	color: #f0f;
+      	font-size: 1.25rem;
+      	line-height: 1rem;
+      	border-color: #f0f;
+      }
 
-.rounded-xl .items-center {
-	color: #f0f;
-	border-color: #f0f;
-}
+      .mr-1 .rounded-xl .items-center {
+      	color: #f0f;
+      	border-color: #f0f;
+      }
 
-.highlighted {
-	padding: 3px;
-	margin: -7px 0;
-	font-weight: bold !important; /* Optionally make it bold */
-}
+      .rounded-xl .items-center {
+      	color: #f0f;
+      	border-color: #f0f;
+      }
 
-.p-2 {
-	padding: 0.25rem;
-}
+      .highlighted {
+      	padding: 3px;
+      	margin: -7px 0;
+      	font-weight: bold !important; /* Optionally make it bold */
+      }
 
-.text-sm {
-	font-size: 0.75rem;
-	line-height: 1rem;
-}
+      .p-2 {
+      	padding: 0.25rem;
+      }
 
-.mx-auto {
-	// Center the container
-	margin-left: auto;
-	margin-right: auto;
-}
+      .text-sm {
+      	font-size: 0.75rem;
+      	line-height: 1rem;
+      }
 
-.flex {
-	display: flex;
-}
+      .mx-auto {
+      	// Center the container
+      	margin-left: auto;
+      	margin-right: auto;
+      }
 
-.flex-1 {
-	flex: 1; // Make the container take up available space
-}
+      .flex {
+      	display: flex;
+      }
 
-.gap-4 {
-	gap: 1rem; // You can tweak this if needed
-}
+      .flex-1 {
+      	flex: 1; // Make the container take up available space
+      }
 
-.md\:gap-5 {
-	@media (min-width: 768px) {
-		gap: 1.25rem;
-	}
-}
+      .gap-4 {
+      	gap: 1rem; // You can tweak this if needed
+      }
 
-.lg\:gap-6 {
-	@media (min-width: 1024px) {
-		gap: 1.5rem;
-	}
-}
+      .md\:gap-5 {
+      	@media (min-width: 768px) {
+      		gap: 1.25rem;
+      	}
+      }
 
-.md\:max-w-3xl,
-.lg\:max-w-\[40rem\],
-.xl\:max-w-\[48rem\] {
-	// Remove restrictive maximum widths for wider display
-	@media (min-width: 768px) {
-		max-width: 90%;
-	}
-}
+      .lg\:gap-6 {
+      	@media (min-width: 1024px) {
+      		gap: 1.5rem;
+      	}
+      }
 
-// Ensure the container always takes 90% of the available width
-.group\/conversation-turn {
-	width: 90%;
-	margin-left: auto;
-	margin-right: auto;
-}
+      .md\:max-w-3xl,
+      .lg\:max-w-\[40rem\],
+      .xl\:max-w-\[48rem\] {
+      	// Remove restrictive maximum widths for wider display
+      	@media (min-width: 768px) {
+      		max-width: 90%;
+      	}
+      }
 
-// Other layout tweaks to ensure consistent appearance
-.flex-shrink-0 {
-	flex-shrink: 0;
-}
+      // Ensure the container always takes 90% of the available width
+      .group\/conversation-turn {
+      	width: 90%;
+      	margin-left: auto;
+      	margin-right: auto;
+      }
 
-.min-w-0 {
-	min-width: 0;
-}
+      // Other layout tweaks to ensure consistent appearance
+      .flex-shrink-0 {
+      	flex-shrink: 0;
+      }
 
-.items-end {
-	align-items: flex-end;
-}
+      .min-w-0 {
+      	min-width: 0;
+      }
 
-// Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
-.gizmo-bot-avatar {
-	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
-}
+      .items-end {
+      	align-items: flex-end;
+      }
 
-// Any additional rules to override padding/margin if necessary
-.p-1 {
-	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
-}
+      // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
+      .gizmo-bot-avatar {
+      	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
+      }
 
-//._main_5jn6z_1 {
-//    width: 90% !important;  // Or any desired width value
-//}
+      // Any additional rules to override padding/margin if necessary
+      .p-1 {
+      	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
+      }
 
-.custom-width {
-    width: 90% !important;  // Or any desired value
-}
+      //._main_5jn6z_1 {
+      //    width: 90% !important;  // Or any desired width value
+      //}
+
+      .custom-width {
+          width: 90% !important;  // Or any desired value
+      }
 
 
-.mt-5 {
-    margin: 0;
-}
+      .mt-5 {
+          margin: 0;
+      }
