@@ -3,18 +3,13 @@ Chrome Extention: User JavaScript and CSS: https://tenrabbits.github.io/user-js-
 Developer mode is now mandatory, it's a Google requirement for the UserScripts extension  
 
 #### Categorize by rename chats and writing between brackets like so: [catagory]
-[<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/Screenshot 2024-12-04 143759.png?raw=true"/>]()
-[<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/Screenshot%202024-11-11%20125208.png?raw=true"/>]()    
-|    |  |
-|---------------------|----------------------------------------------------------------------------------|
-| [<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/Screenshot%202024-11-11%20125053.png?raw=true"/>]()   [<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/Screenshot%202024-11-11%20125027.png?raw=true"/>]()                |                                                                     |
+[<img width="75%" src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/png/setup.png?raw=true"/>]()   
 
 
+| [<img width="100%" src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/png/uncatagorized.png?raw=true"/>]() | [<img width="100%" src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/png/catagories.png?raw=true"/>]() |
+|------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
 
 
+#### [<img width="75%" src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/png/Chat-GPT-catagorization.png?raw=true"/>]()
 
-
-
-#### [<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/Chat-GPT-catagorization.png?raw=true"/>]()
-
-#### [<img src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/UserJavaScriptScreen.png?raw=true"/>]()
+#### [<img width="75%" src="https://github.com/bg-omar/chat-gpt-catagorizer/blob/main/png/UserJavaScriptScreen.png?raw=true"/>]()
