@@ -516,22 +516,31 @@ function sortLists() {
     fragment.appendChild(singleItemsOlContainer);
   }
 
-  // Sort categories by the earliest date among their items
+// Sort categories by the earliest date among their items (ascending order)
   sortedCategories.sort((a, b) => {
-    if (!a.earliestDate) return 1;
-    if (!b.earliestDate) return -1;
-    return a.earliestDate - b.earliestDate;
+    const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
+    const dateB = b.earliestDate || new Date(0);
+    return dateB - dateA; // For descending order, use `dateB - dateA`
   });
 
-  // Create categorized lists based on sorted categories
+  console.log("Sorted categories by earliest date:", sortedCategories);
+
+
+// Create categorized lists based on sorted categories and append them in order
   sortedCategories.forEach(({ category, items }) => {
     const newOlContainer = createCategoryContainer(
-      category,
-      items,
-      wordColors[category]
+        category,
+        items,
+        wordColors[category]
     );
     fragment.appendChild(newOlContainer);
   });
+
+// Now append the fragment to the DOM
+  if (listContainer) {
+    listContainer.innerHTML = ''; // Clear existing content
+    listContainer.appendChild(fragment); // Append sorted categories
+  }
 
   // Clear all existing <ol> elements from the container, except the first one
   listContainer.querySelectorAll('ol').forEach((ol, index) => {

@@ -173,7 +173,8 @@ function sortLists()  {
       })
       if(dateStr !== undefined)conversations = removeObjectWithId(conversations, dataId);
       //console.log("conversations: ", conversations.length, dataId);
-      const date = dateStr ? new Date(dateStr) : date2;
+      const fallbackDate = new Date(0); // Epoch time for missing dates
+      const date = dateStr ? new Date(dateStr) : fallbackDate;
 
       if (category) {
         if (!categories[category]) categories[category] = [];
@@ -199,7 +200,8 @@ function sortLists()  {
   if (conversations && conversations.length > 0) {
     conversations.forEach((conversation) => {
       const dateStr = conversation.update_time;
-      const date = dateStr ? new Date(dateStr) : null;
+      const fallbackDate = new Date(0); // Epoch time for missing dates
+      const date = dateStr ? new Date(dateStr) : fallbackDate;
       orphans++
       const li = document.createElement('li');
       li.className = "relative";
@@ -260,8 +262,12 @@ function sortLists()  {
       singleItems.push(...categories[category]);
     } else {
       // Store categories along with the earliest date in their items
-      const earliestDate = categories[category].find(item => item.date !== undefined)?.date;
-      console.log("Earlies Date: ", earliestDate, categories[category]);
+      const earliestDate = categories[category]
+          .filter(item => item.date instanceof Date && !isNaN(item.date))
+          .reduce((earliest, current) => (!earliest || current.date < earliest ? current.date : earliest), null);
+
+      console.log("Earliest Date for category:", category, earliestDate);
+
       sortedCategories.push({
         category,
         items: categories[category].map((itemObj) => itemObj.item),
@@ -279,14 +285,18 @@ function sortLists()  {
     fragment.appendChild(singleItemsOlContainer);
   }
 
-  // Sort categories by the earliest date among their items
+// Sort categories by the earliest date among their items (ascending order)
   sortedCategories.sort((a, b) => {
-    if (!a.earliestDate) return 1;
-    if (!b.earliestDate) return -1;
-    return a.earliestDate - b.earliestDate;
+    const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
+    const dateB = b.earliestDate || new Date(0);
+    return dateB - dateA; // For descending order, use `dateB - dateA`
   });
 
-  // Create categorized lists based on sorted categories
+  console.log("Sorted categories by earliest date:", sortedCategories);
+
+// Clear and sort the fragment
+
+// Create categorized lists based on sorted categories and append them in order
   sortedCategories.forEach(({ category, items }) => {
     const newOlContainer = createCategoryContainer(
         category,
@@ -435,7 +445,10 @@ async function fetchConversations() {
       apiOffset += apiLimit;
 
       sessionStorage.setItem('apiOffset', apiOffset);
-      updatedConversations = mergeAndCleanConversations(managesessionStorage('get'), data.items);
+      const updatedConversations = mergeAndCleanConversations(managesessionStorage('get'), data.items.map(item => ({
+        ...item,
+        update_time: item.update_time ? new Date(item.update_time) : null,
+      })));
       managesessionStorage('set', updatedConversations);
 
       if (apiOffset >= data.total) {
