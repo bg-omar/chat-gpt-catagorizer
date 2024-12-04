@@ -51,7 +51,7 @@ function repeater() {
     } catch (e) {
       console.error("Error in sortLists interval:", e);
     }
-  }, 4500);
+  }, 1000);
 
   setTimeout(() => {
     clearInterval(firstSort);
@@ -236,11 +236,23 @@ function sortLists()  {
     });
   }
 
-  // Sort uncategorized items by date
-  uncategorizedItems.sort((a, b) => {
+// Deduplicate uncategorizedItems based on their data-id
+  const uniqueUncategorizedItems = [];
+  const seenIds = new Set();
+
+  uncategorizedItems.forEach((itemObj) => {
+    const itemId = itemObj.item.getAttribute('data-id');
+    if (!seenIds.has(itemId)) {
+      seenIds.add(itemId);
+      uniqueUncategorizedItems.push(itemObj);
+    }
+  });
+
+// Sort by most recent date
+  uniqueUncategorizedItems.sort((a, b) => {
     if (!a.date) return 1;
     if (!b.date) return -1;
-    return b.date - a.date;
+    return b.date - a.date; // Most recent first
   });
 
   // Create a document fragment to hold new categorized <ol> elements
@@ -268,11 +280,16 @@ function sortLists()  {
 
       console.log("Earliest Date for category:", category, earliestDate);
 
+      const mostRecentDate = categories[category]
+          .filter(item => item.date instanceof Date && !isNaN(item.date))
+          .reduce((mostRecent, current) => (!mostRecent || current.date > mostRecent ? current.date : mostRecent), null);
+
       sortedCategories.push({
         category,
         items: categories[category].map((itemObj) => itemObj.item),
-        earliestDate,
+        earliestDate: mostRecentDate, // Now reflects the most recent date
       });
+
     }
   }
 
