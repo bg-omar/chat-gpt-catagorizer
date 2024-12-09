@@ -17,6 +17,21 @@
       if (token) {
         //console.log("Captured Bearer token from request:", token);
         sessionStorage.setItem('authToken', token);
+
+        const url = new URL(window.location.href);
+        // Check if 'token' already exists to avoid duplicates
+        if (!url.searchParams.has('token')) {
+          url.searchParams.set('token', token); // Set the id=1 query param
+          window.history.pushState({}, '', url); // Update the URL without reloading
+          // Send the token back to the parent window
+          window.opener.postMessage(
+              { token: jwtToken },
+              "https://localhost:4200"
+          );
+
+          // Optionally close the tab
+          //window.close();
+        }
       }
     }
 
@@ -26,12 +41,15 @@
 })();
 
 sessionStorage.setItem('apiOffset', 0);
-let apiLimit = 28; // Matches API's default
+let apiLimit = 56; // Matches API's default
 let apiOrder = 'updated';
 let isScriptLoading = false;
 let shouldFetchMore = true; // Initially, allow fetching
+let isPaused = false;  // Global pause flag
+let repeaterInterval;  // Store repeater interval reference
 
 document.addEventListener('DOMContentLoaded', () => {
+  addTitleBanner(); // Add the banner on page load
   repeater();
   initializeMutationObserver();
   initializeButtonClickListeners();
@@ -39,17 +57,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 function repeater() {
+  if (isPaused) return;  // Prevent restarting if paused
   const firstSort = setInterval(async () => {
-    try {
-      if (shouldFetchMore) {
-        await fetchConversations();
-      } else {
-        await checkAndReplaceText();
-        await sortLists();
-      }
+    if (!isPaused) {
+      try {
+        if (shouldFetchMore) {
+          await fetchConversations();
+        } else {
+          await checkAndReplaceText();
+          await sortLists();
+        }
 
-    } catch (e) {
-      console.error("Error in sortLists interval:", e);
+      } catch (e) {
+        console.error("Error in sortLists interval:", e);
+      }
     }
   }, 1000);
 
@@ -57,14 +78,16 @@ function repeater() {
     clearInterval(firstSort);
 
     setInterval(async () => {
-      try {
-        await checkAndReplaceText();
-        await sortLists();
-      } catch (e) {
-        console.error("Error in checkAndReplaceText interval after timeout:", e);
+      if (!isPaused) {
+        try {
+          await checkAndReplaceText();
+          await sortLists();
+        } catch (e) {
+          console.error("Error in checkAndReplaceText interval after timeout:", e);
+        }
       }
-    }, 30000);
-  }, 30000);
+    }, 10000);
+  }, 10000);
 }
 
 function checkAndReplaceText()  {
@@ -225,8 +248,7 @@ function sortLists()  {
       processedItems.add(li);
     });
   }
-  //console.log("orphan item: ", orphans);
-  //console.log("uncategorizedItems: ", uncategorizedItems);
+  console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems, "processedItems: ", processedItems);
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
     categories[category].sort((a, b) => {
@@ -259,10 +281,9 @@ function sortLists()  {
   const fragment = document.createDocumentFragment();
 
   // Create "Uncategorized" section first
-  if (uncategorizedItems.length > 0) {
-    const uncategorizedOlContainer = createCategoryContainer(
-        'Uncategorized',
-        uncategorizedItems.map((itemObj) => itemObj.item)
+  if (uniqueUncategorizedItems.length > 0) {
+    const uncategorizedOlContainer = createCategoryContainer('Uncategorized',
+        uniqueUncategorizedItems.map((itemObj) => itemObj.item)
     );
     fragment.appendChild(uncategorizedOlContainer);
   }
@@ -429,17 +450,6 @@ function initializeButtonClickListeners() {
   });
 }
 
-function handleButtonClick(button) {
-  console.log(`Button with ID ${button.id} was clicked!`);
-  // Additional functionality can be added here
-}
-
-function reinitializeDropdowns() {
-  document.querySelectorAll('[data-radix-menu-content]').forEach(dropdown => {
-    // Custom initialization or reattachment logic as needed by the dropdown library
-  });
-}
-
 async function fetchConversations() {
   //console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
   if (isScriptLoading) return;
@@ -536,4 +546,69 @@ function removeItemAll(arr, value) {
     }
   }
   return arr;
+}
+
+function addTitleBanner() {
+  const existingBanner = document.querySelector("#title-banner");
+  if (existingBanner) existingBanner.remove();
+  // Extract the item ID from the URL
+  const currentItemId = new URL(window.location.href).pathname.split("/c/")[1];
+  if (!currentItemId) return;
+
+  // Fetch stored conversations
+  const conversations = managesessionStorage("get") || [];
+  const currentConversation = conversations.find(
+      (item) => item.id === currentItemId
+  );
+
+  // If no matching conversation is found, skip
+  if (!currentConversation) return;
+
+  // Create the title banner
+  const banner = document.createElement("div");
+  banner.id = "title-banner";
+  banner.style.cssText = `
+    position: fixed;
+    bottom: 2rem;
+    right: 0;
+    height: 50px;
+    color: white;
+
+    margin: 0 25%;
+    font-size: 1.125rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    text-shadow: 3px 3px #303;
+  `;
+  banner.textContent = currentConversation.title;
+
+  // Add the banner to the document
+  document.body.prepend(banner);
+}
+
+function handleButtonClick(button) {
+  console.log(`Button with ID ${button.id} was clicked!`);
+
+  // Pause logic
+  if (!isPaused) {
+    isPaused = true;
+    clearInterval(repeaterInterval); // Stop the repeater
+    console.log("Script paused.");
+
+    // Resume after a delay
+    setTimeout(() => {
+      isPaused = false;
+      startRepeater();  // Restart the repeater
+      console.log("Script resumed.");
+    }, 60000); // Adjust delay as needed (in milliseconds)
+  }
+}
+
+function reinitializeDropdowns() {
+  document.querySelectorAll('[data-radix-menu-content]').forEach(dropdown => {
+    // Custom initialization or reattachment logic as needed by the dropdown library
+  });
 }
