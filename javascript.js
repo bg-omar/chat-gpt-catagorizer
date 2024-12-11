@@ -1,64 +1,154 @@
-const capturetoken = false;
+let apiLimit = 28; // Matches API's default
+let apiOrder = 'updated';
+let apiOffset = 0;
+let isScriptLoading = false;
+let isFetchingMissingData = false;
+let shouldFetchMore = true;  // Initially, allow fetching
+let isPaused = false;  // Global pause flag
+let fetchedConversations = [];
+let updatedConversations = [];
+let interceptorEnabled = false  // Add this global flag
+let hasTokenBeenCaptured = false;
+sessionStorage.setItem('apiOffset', apiOffset);
 
-(function ()  {
+(function () {
   const originalFetch = window.fetch;
+
   window.fetch = async function (...args) {
     const [resource, config] = args;
-
-    if (config && config.headers) {// Check if headers is a Headers instance or a plain object
+    if (config && config.headers) {
       let token = null;
-      if (config.headers instanceof Headers) {
-        if (config.headers.has('Authorization')) { // For Headers object
-          const authHeader = config.headers.get('Authorization');
-          if (authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
-        }
-      } else if (typeof config.headers === 'object') {
-        const authHeader = config.headers['Authorization'];        // For plain object
-        if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
+
+      // Extract Bearer token from headers
+      if (config.headers instanceof Headers && config.headers.has('Authorization')) {
+        const authHeader = config.headers.get('Authorization');
+        if (authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
+      } else if (typeof config.headers === 'object' && config.headers['Authorization']) {
+        const authHeader = config.headers['Authorization'];
+        if (authHeader.startsWith('Bearer ')) token = authHeader.split(' ')[1];
       }
+
       if (token) {
-        //console.log("Captured Bearer token from request:", token);
-        sessionStorage.setItem('authToken', token);
-      }
-
-      if (capturetoken) {
-        const url = new URL(window.location.href);
-        // Check if 'token' already exists to avoid duplicates
-        if (!url.searchParams.has('token')) {
-          url.searchParams.set('token', token); // Set the id=1 query param
-          window.history.pushState({}, '', url); // Update the URL without reloading
-          // Send the token back to the parent window
-          window.opener.postMessage(
-              { token: jwtToken },
-              "https://localhost:4200"
-          );
-
-          // Optionally close the tab
-          //window.close();
-        }
+        sessionStorage.setItem('authToken', token);  // Store token securely
       }
     }
-
-    const response = await originalFetch(...args);
-    return response;
+    return originalFetch.apply(this, args);  // Proceed with other fetch calls
   };
 })();
 
-sessionStorage.setItem('apiOffset', 0);
-let apiLimit = 56; // Matches API's default
-let apiOrder = 'updated';
-let isScriptLoading = false;
-let shouldFetchMore = true; // Initially, allow fetching
-let isPaused = false;  // Global pause flag
-let repeaterInterval;  // Store repeater interval reference
+function interceptFetch() {
+  const originalFetch = window.fetch;
 
-const storedConversations =  managesessionStorage('get');
-let fetchedConversations = [];
-let updatedConversations = [];
+  window.fetch = async function (...args) {
+    const [resource, config] = args;
 
-document.addEventListener('DOMContentLoaded', () => {
-  addSidebarToggleListeners();
+    // Bypass interceptor if fetching or disabled
+    if (!interceptorEnabled || isFetchingMissingData) {
+      return originalFetch.apply(this, args);
+    }
+
+    if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
+      console.log(`Intercepting API call: ${resource}`);
+
+      const response = await originalFetch(...args);
+      const data = await response.clone().json();  // Clone response for processing
+      await originalFetch.apply(this, args);
+      console.log("Captured API Data:", data);
+      fetchedConversations.push(...data.items);
+
+      // Disable interceptor if all data is fetched
+      if (data.offset + data.items.length >= data.total - data.offset) {
+        console.log("All data fetched. Disabling interceptor.");
+        interceptorEnabled = false;
+      }
+
+      // Start fetching missing conversations
+      isFetchingMissingData = true;
+      await fetchMissingConversations(data);
+      isFetchingMissingData = false;
+    }
+
+    return originalFetch.apply(this, args);  // Proceed with other fetch calls
+  };
+}
+
+async function fetchMissingConversations(initialData) {
+  sessionStorage.setItem('apiOffset', (initialData.offset + initialData.limit));
+  const totalData = initialData.total;
+  const token = sessionStorage.getItem("authToken");
+
+  if (!token) {
+    console.error("Bearer token not found.");
+    return;
+  }
+
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  while (apiOffset < (totalData + apiLimit) && interceptorEnabled) {
+    try {
+      if (shouldFetchMore) {
+        console.log("Fetching at apiOffset:", apiOffset);
+        apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
+        const response = await fetch(
+            `/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (!response.ok) throw new Error("Failed to fetch conversations");
+
+        const data = await response.json();
+        console.log("Fetched API Data:", data);
+
+        if (data.items.length === 0) {
+          console.log("No more conversations to fetch.");
+          break;
+        }
+
+        apiOffset += apiLimit;
+        fetchedConversations.push(...data.items)
+        sessionStorage.setItem('apiOffset', apiOffset);
+        console.log("All fetchedConversations: ", fetchedConversations);
+
+
+        // After fetching new conversations
+        const fetchedData = JSON.parse(sessionStorage.getItem("fetchedData")) || [];
+        const updatedData = [...fetchedData, ...data.items].filter(
+            (item, index, array) =>
+                array.findIndex((i) => i.id === item.id) === index
+        );
+        sessionStorage.setItem("fetchedData", JSON.stringify(updatedData));
+
+        console.log("Fetched Conversations Updated:", updatedData.length);
+
+        // Reset flags when fetching completes
+        if (apiOffset >= (totalData + apiLimit)) {
+          console.log("Fetching completed. Resetting flags.");
+          interceptorEnabled = false;
+          isFetchingMissingData = false;
+          shouldFetchMore = false;  // Prevents unnecessary calls
+          startRepeater();
+        }  else {
+          await delay(2000);  // Slow down the loop
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching additional conversations:", error);
+      break;
+    }
+  }
+  updatedConversations = fetchedConversations.items.map(item => ({
+    ...item,
+    update_time: item.update_time ? new Date(item.update_time) : null,
+  }));
+  managesessionStorage('set', updatedConversations);
+  startRepeater(); // Toggle the repeater
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await interceptFetch();
   repeater();
+  addSidebarToggleListeners();
   initializeMutationObserver();
   initializeButtonClickListeners();
 });
@@ -67,80 +157,22 @@ document.addEventListener('DOMContentLoaded', () => {
 function repeater() {
   console.log(`repeater is starting!`);
   if (isPaused) return;  // Prevent restarting if paused
-  const firstSort = setInterval(async () => {
-    if (!isPaused) {
-      console.log(`firstSort  Interval is starting!`);
-      try {
-        if (shouldFetchMore) {
-          await fetchConversations();
-        } else {
-          await checkAndReplaceText();
-          await sortLists();
-        }
+  setInterval(async () => {
+    console.log(`Interval 2 is starting!`);
+    console.log("%c 3 --> Line: 160||javascript.js\n isPaused: ","color:#ff0;", isPaused);
+    console.log("%c 4 --> Line: 161||javascript.js\n shouldFetchMore: ","color:#f00;", shouldFetchMore);
+    if (!isPaused && !shouldFetchMore) {
 
+      try {
+        await checkAndReplaceText();
+        await sortLists();
       } catch (e) {
-        console.error("Error in sortLists interval:", e);
+        console.error("Error in checkAndReplaceText interval after timeout:", e);
       }
     }
-  }, 1000);
-
-  setTimeout(() => {
-    clearInterval(firstSort);
-
-    setInterval(async () => {
-      console.log(`Interval 2 is starting!`);
-      if (!isPaused && !shouldFetchMore) {
-        try {
-          await checkAndReplaceText();
-          await sortLists();
-        } catch (e) {
-          console.error("Error in checkAndReplaceText interval after timeout:", e);
-        }
-      }
-    }, 10000);
   }, 10000);
 }
 
-async function fetchConversations() {
-  //console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
-  if (isScriptLoading) return;
-  isScriptLoading = true;
-
-  try {
-    if (shouldFetchMore) {
-      apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
-      console.log('apiOffset : ', apiOffset);
-
-      const token = sessionStorage.getItem('authToken');    // Retrieve the token from local storage
-      if (!token) throw new Error('Bearer token not found');
-
-      const response = await fetch(`/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`, {  headers: {'Authorization': `Bearer ${token}`}  });     // Add Authorization header and make the API call
-
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      const data = await response.json();
-      apiOffset += apiLimit;
-      fetchedConversations.push(...data.items)
-      sessionStorage.setItem('apiOffset', apiOffset);
-      console.log("All fetchedConversations: ", fetchedConversations);
-
-      if (apiOffset >= data.total) {
-        shouldFetchMore = false;
-        console.log("All conversations have been fetched.");
-      }
-    } else {
-      updatedConversations = fetchedConversations.items.map(item => ({
-        ...item,
-        update_time: item.update_time ? new Date(item.update_time) : null,
-      }));
-      managesessionStorage('set', updatedConversations);
-
-    }
-  } catch (error) {
-    console.error("Error fetching conversations:", error);
-  } finally {
-    isScriptLoading = false; // Ensure it's reset regardless of success or failure
-  }
-}
 
 function checkAndReplaceText()  {
   console.log(`checkAndReplaceText is starting!`);
@@ -224,7 +256,7 @@ function olListsCategorization(olListsToCategorize, totalitems, processedItems, 
       getConversations.forEach((item2) => {
         if (dataId === item2.id) {
           console.log("%c 1 --> Line: 226||javascript.js\n dataId === item.id: ","color:#f0f;", dataId === item2.id);
-          date2 = new Date(item2.update_time);
+          date2 = dateStr ? new Date(dateStr) : new Date(item2.update_time);
           console.log("%c 1 --> Line: 229||javascript.js\n date2: ","color:#f0f;", date2);
           item.setAttribute("data-date", date2);
         }
@@ -243,6 +275,7 @@ function olListsCategorization(olListsToCategorize, totalitems, processedItems, 
     });
     console.log("%c 2 --> Line: 242||javascript.js\n processedItems1: ","color:#0f0;", processedItems1);
   });
+  sessionStorage.setItem("processedItems1", processedItems1);
   return conversations;
 }
 
@@ -279,8 +312,11 @@ function processOrphans(conversations, olElement, processedItems, uncategorizedI
     });
     console.log("%c 2 --> Line: 242||javascript.js\n processedItems2: ","color:#0f0;", processedItems2);
   }
+  sessionStorage.setItem("processedOrphans", processedItems2);
   console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems, "processedItems: ", processedItems);
 }
+
+
 
 function sortingItems(categories) {
   // Sort items within categories by date (ascending order)
@@ -328,21 +364,19 @@ function sortLists()  {
 
   // Clear processedItems set to reflect the latest DOM structure
   let processedItems = new Set();
-
-  let processedItems2 = new Set();
   let wordColors = {};
-  let conversations;
+  let sessionConversations;
   try {
     wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
     getConversations = managesessionStorage('get') || {};
-    conversations = Array.from(getConversations);
+    sessionConversations = Array.from(getConversations);
   } catch (e) {
     console.error('Error parsing wordColors from sessionStorage:', e);
   }
 
   let totalitems = 0;
 
-  conversations = olListsCategorization(olListsToCategorize, totalitems, processedItems, conversations, categories, uncategorizedItems);
+  sessionConversations = olListsCategorization(olListsToCategorize, totalitems, processedItems, sessionConversations, categories, uncategorizedItems);
 
 
   if (!olListsToCategorize[0]) {  // Create <ol> if it doesn't exist
@@ -351,7 +385,8 @@ function sortLists()  {
   }
   let olElement = olListsToCategorize[0];
 
-  processOrphans(conversations, olElement, processedItems, uncategorizedItems);
+  processOrphans(sessionConversations, olElement, processedItems, uncategorizedItems);
+  sessionStorage.setItem("processedItemsAll", processedItems);
   sortingItems(categories);
   const uniqueUncategorizedItems = uncatagorizedCatagory(uncategorizedItems);
 
@@ -543,6 +578,7 @@ function managesessionStorage(action, conversations = []) {
     return JSON.parse(sessionStorage.getItem(storageKey)) || [];
   } else if (action === 'set') {
     sessionStorage.setItem(storageKey, JSON.stringify(conversations));
+    localStorage.setItem(storageKey, JSON.stringify(conversations));
   }
 }
 
@@ -641,7 +677,7 @@ function handleButtonClick(button) {
   // Pause logic
   if (!isPaused) {
     isPaused = true;
-    clearInterval(repeaterInterval); // Stop the repeater
+    toggleRepeater(); // Toggle the repeater
     console.log("Script paused.");
 
     // Resume after a delay
@@ -700,11 +736,6 @@ function handleSidebarToggle(event) {
   });
 }
 
-function handleButtonClick(button) {
-  console.log(`Button with ID ${button.id} was clicked!`);
-  toggleRepeater(); // Toggle the repeater
-}
-
 function toggleRepeater() {
   if (isPaused) {
     startRepeater(); // Resume if paused
@@ -715,6 +746,7 @@ function toggleRepeater() {
 
 // Function to start the repeater
 function startRepeater() {
+  shouldFetchMore = false;  // Prevents unnecessary calls
   if (isPaused) {
     isPaused = false;
     repeater();  // Call the repeater function to restart
@@ -725,6 +757,5 @@ function startRepeater() {
 // Function to stop the repeater
 function stopRepeater() {
   isPaused = true;
-  clearInterval(repeaterInterval);  // Clear the interval
   console.log("Repeater paused.");
 }
