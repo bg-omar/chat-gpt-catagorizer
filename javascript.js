@@ -57,7 +57,7 @@ let fetchedConversations = [];
 let updatedConversations = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-  addTitleBanner(); // Add the banner on page load
+  addSidebarToggleListeners();
   repeater();
   initializeMutationObserver();
   initializeButtonClickListeners();
@@ -89,7 +89,7 @@ function repeater() {
 
     setInterval(async () => {
       console.log(`Interval 2 is starting!`);
-      if (!isPaused) {
+      if (!isPaused && !shouldFetchMore) {
         try {
           await checkAndReplaceText();
           await sortLists();
@@ -128,14 +128,11 @@ async function fetchConversations() {
         console.log("All conversations have been fetched.");
       }
     } else {
-
-      sessionStorage.setItem("fetched", JSON.stringify(fetchedConversations.items));
-      updatedConversations = mergeAndCleanConversations(storedConversations, fetchedConversations.items.map(item => ({
+      updatedConversations = fetchedConversations.items.map(item => ({
         ...item,
         update_time: item.update_time ? new Date(item.update_time) : null,
-      })));
+      }));
       managesessionStorage('set', updatedConversations);
-
 
     }
   } catch (error) {
@@ -150,6 +147,7 @@ function checkAndReplaceText()  {
   const divElements = document.querySelectorAll('.relative.grow.overflow-hidden.whitespace-nowrap');
   if (divElements.length === 0) return;
 
+  const processedIds = new Set(); // Track processed elements
   const colors = [
     '#f0f', '#FF7E00', '#64edd3', '#0f0', '#3cc', '#ff0', '#f00', '#0ff', '#336699',
     'gray', 'silver', '#CC99FF', '#6633FF', '#66FF99', '#FF6633', '#66CCCC', '#33CC33',
@@ -208,6 +206,7 @@ function checkAndReplaceText()  {
 }
 
 function olListsCategorization(olListsToCategorize, totalitems, processedItems, conversations, categories, uncategorizedItems) {
+  let processedItems1 = new Set();
   olListsToCategorize.forEach((ol) => {
     ol.setAttribute('style', 'display: block;');
     console.log("ol: ", ol);
@@ -239,12 +238,16 @@ function olListsCategorization(olListsToCategorize, totalitems, processedItems, 
       }
       console.log("item: ", item);
       processedItems.add(item);
+      processedItems1.add(item);
+
     });
+    console.log("%c 2 --> Line: 242||javascript.js\n processedItems1: ","color:#0f0;", processedItems1);
   });
   return conversations;
 }
 
 function processOrphans(conversations, olElement, processedItems, uncategorizedItems) {
+  let processedItems2 = new Set();
   let orphans = 0;
   if (conversations && conversations.length > 0) {
     conversations.forEach((conversation) => {
@@ -272,7 +275,9 @@ function processOrphans(conversations, olElement, processedItems, uncategorizedI
       console.log("li: ", li);
       olElement.appendChild(li);
       processedItems.add(li);
+      processedItems2.add(li);
     });
+    console.log("%c 2 --> Line: 242||javascript.js\n processedItems2: ","color:#0f0;", processedItems2);
   }
   console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems, "processedItems: ", processedItems);
 }
@@ -323,6 +328,8 @@ function sortLists()  {
 
   // Clear processedItems set to reflect the latest DOM structure
   let processedItems = new Set();
+
+  let processedItems2 = new Set();
   let wordColors = {};
   let conversations;
   try {
@@ -427,6 +434,16 @@ function sortLists()  {
   reinitializeDropdowns();
 }
 
+
+function removeDuplicateItems(categoryItems) {
+  const seenIds = new Set();
+  return categoryItems.filter((itemObj) => {
+    const itemId = itemObj.item.getAttribute("data-id");
+    if (!itemId || seenIds.has(itemId)) return false;
+    seenIds.add(itemId);
+    return true;
+  });
+}
 function createCategoryContainer(category, items, color) {
   const newOlContainer = document.createElement('div');
   newOlContainer.className = 'relative mt-5 first:mt-0 last:mb-5';
@@ -640,4 +657,74 @@ function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach(dropdown => {
     // Custom initialization or reattachment logic as needed by the dropdown library
   });
+}
+
+
+function addSidebarToggleListeners() {
+  const closeButton = document.querySelector('[data-testid="close-sidebar-button"]');
+
+
+  // Attach event listeners if buttons are found
+  if (closeButton) {
+    closeButton.addEventListener('click', handleSidebarToggle);
+  }
+
+}
+
+// Handle the sidebar toggle event
+function handleSidebarToggle(event) {
+  const button = event.target.closest('button');
+
+  // Check if the sidebar is closing or opening
+  if (button?.dataset?.testid === "close-sidebar-button") {
+    console.log("Sidebar closing. Pausing the script...");
+    stopRepeater();  // Pause the repeater
+  } else if (button?.getAttribute("aria-label") === "Open sidebar") {
+    console.log("Sidebar opening. Resuming the script...");
+    startRepeater();  // Restart the repeater
+  }
+
+  document.body.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    const targetDiv = event.target.closest('.flex.items-center.gap-0.overflow-hidden');
+
+    if (button) {
+      console.log(`Button clicked: ${button.outerHTML}`);
+      handleButtonClick(button); // Call existing button logic
+    }
+
+    if (targetDiv) {
+      console.log(`Target Div clicked: ${targetDiv.outerHTML}`);
+      toggleRepeater(); // Pause/resume on div clicks
+    }
+  });
+}
+
+function handleButtonClick(button) {
+  console.log(`Button with ID ${button.id} was clicked!`);
+  toggleRepeater(); // Toggle the repeater
+}
+
+function toggleRepeater() {
+  if (isPaused) {
+    startRepeater(); // Resume if paused
+  } else {
+    stopRepeater();  // Pause if running
+  }
+}
+
+// Function to start the repeater
+function startRepeater() {
+  if (isPaused) {
+    isPaused = false;
+    repeater();  // Call the repeater function to restart
+    console.log("Repeater resumed.");
+  }
+}
+
+// Function to stop the repeater
+function stopRepeater() {
+  isPaused = true;
+  clearInterval(repeaterInterval);  // Clear the interval
+  console.log("Repeater paused.");
 }
