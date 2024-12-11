@@ -1,3 +1,5 @@
+const capturetoken = false;
+
 (function ()  {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
@@ -17,7 +19,9 @@
       if (token) {
         //console.log("Captured Bearer token from request:", token);
         sessionStorage.setItem('authToken', token);
+      }
 
+      if (capturetoken) {
         const url = new URL(window.location.href);
         // Check if 'token' already exists to avoid duplicates
         if (!url.searchParams.has('token')) {
@@ -48,6 +52,10 @@ let shouldFetchMore = true; // Initially, allow fetching
 let isPaused = false;  // Global pause flag
 let repeaterInterval;  // Store repeater interval reference
 
+const storedConversations =  managesessionStorage('get');
+let fetchedConversations = [];
+let updatedConversations = [];
+
 document.addEventListener('DOMContentLoaded', () => {
   addTitleBanner(); // Add the banner on page load
   repeater();
@@ -57,13 +65,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 function repeater() {
+  console.log(`repeater is starting!`);
   if (isPaused) return;  // Prevent restarting if paused
   const firstSort = setInterval(async () => {
     if (!isPaused) {
+      console.log(`firstSort  Interval is starting!`);
       try {
         if (shouldFetchMore) {
           await fetchConversations();
         } else {
+          await afterFetch();
           await checkAndReplaceText();
           await sortLists();
         }
@@ -78,6 +89,7 @@ function repeater() {
     clearInterval(firstSort);
 
     setInterval(async () => {
+      console.log(`Interval 2 is starting!`);
       if (!isPaused) {
         try {
           await checkAndReplaceText();
@@ -90,7 +102,72 @@ function repeater() {
   }, 10000);
 }
 
+async function fetchConversations() {
+  //console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
+  if (isScriptLoading) return;
+  isScriptLoading = true;
+
+  try {
+    if (shouldFetchMore) {
+      apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
+      console.log('apiOffset : ', apiOffset);
+
+      const token = sessionStorage.getItem('authToken');    // Retrieve the token from local storage
+      if (!token) throw new Error('Bearer token not found');
+
+      const response = await fetch(`/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`, {  headers: {'Authorization': `Bearer ${token}`}  });     // Add Authorization header and make the API call
+
+      if (!response.ok) throw new Error('Failed to fetch conversations');
+      const data = await response.json();
+      apiOffset += apiLimit;
+      fetchedConversations.push(...data.items)
+      sessionStorage.setItem('apiOffset', apiOffset);
+      console.log("All fetchedConversations: ", fetchedConversations);
+
+      if (apiOffset >= data.total) {
+        shouldFetchMore = false;
+        console.log("All conversations have been fetched.");
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+  } finally {
+    isScriptLoading = false; // Ensure it's reset regardless of success or failure
+  }
+}
+
+async function afterFetch() {
+    sessionStorage.setItem("fetched", JSON.stringify(fetchedConversations));
+    updatedConversations = mergeAndCleanConversations(storedConversations, fetchedConversations.map(item => ({
+      ...item,
+      update_time: item.update_time ? new Date(item.update_time) : null,
+    })));
+    managesessionStorage('set', updatedConversations);
+}
+
+// Helper function to merge and clean conversations (removes duplicates)
+function mergeAndCleanConversations(existingConversations, newConversations) {
+  const combinedConversations = [...existingConversations, ...newConversations];
+  return removeDuplicates(combinedConversations);
+}
+
+// Helper function to remove duplicates based on the conversation ID
+function removeDuplicates(conversations) {
+  const uniqueConversations = [];
+  const seenIds = new Set();
+
+  conversations.forEach((conversation) => {
+    if (!seenIds.has(conversation.id)) {
+      seenIds.add(conversation.id);
+      uniqueConversations.push(conversation);
+    }
+  });
+
+  return uniqueConversations;
+}
+
 function checkAndReplaceText()  {
+  console.log(`checkAndReplaceText is starting!`);
   const divElements = document.querySelectorAll('.relative.grow.overflow-hidden.whitespace-nowrap');
   if (divElements.length === 0) return;
 
@@ -118,7 +195,7 @@ function checkAndReplaceText()  {
     let id;
     //console.log(textContent);
     conversations.forEach((item)  => {
-      if (item.title == textContent){
+      if (item.title === textContent){
         date = item.update_time
         id = item.id
       }});
@@ -152,6 +229,7 @@ function checkAndReplaceText()  {
 }
 
 function sortLists()  {
+  console.log(`sortLists is starting!`);
   const categories = {};
   const uncategorizedItems = [];
   const singleItems = []; // To collect single item categories
@@ -163,6 +241,8 @@ function sortLists()  {
 
   // Clear processedItems set to reflect the latest DOM structure
   let processedItems = new Set();
+  let processedItems1 = new Set();
+  let processedItems2 = new Set();
   let wordColors = {};
   let conversations;
   try {
@@ -195,9 +275,9 @@ function sortLists()  {
         }
       })
       if(dateStr !== undefined)conversations = removeObjectWithId(conversations, dataId);
-      //console.log("conversations: ", conversations.length, dataId);
+      console.log("conversations: ", conversations.length, dataId);
       const fallbackDate = new Date(0); // Epoch time for missing dates
-      const date = dateStr ? new Date(dateStr) : fallbackDate;
+      const date = dateStr ? new Date(dateStr) : date2;
 
       if (category) {
         if (!categories[category]) categories[category] = [];
@@ -207,13 +287,12 @@ function sortLists()  {
       }
       //console.log("item: ", item);
       processedItems.add(item);
+      processedItems1.add(item);
     });
   });
-  console.log("olListsToCategorize: ", olListsToCategorize);
+  //console.log("olListsToCategorize: ", olListsToCategorize);
 
-  // Ensure there's an <ol> element in the container.
-  if (!olListsToCategorize[0]) {
-    // Create <ol> if it doesn't exist
+  if (!olListsToCategorize[0]) {  // Create <ol> if it doesn't exist
     olElement = document.createElement('ol');
     olListsToCategorize.appendChild(olElement);
   }
@@ -221,8 +300,9 @@ function sortLists()  {
 
   let orphans = 0;
   if (conversations && conversations.length > 0) {
-    conversations.forEach((conversation) => {
-      const dateStr = conversation.update_time;
+    conversations.forEach((item) => {
+      if (processedItems.has(item)) return;
+      const dateStr = item.update_time;
       const fallbackDate = new Date(0); // Epoch time for missing dates
       const date = dateStr ? new Date(dateStr) : fallbackDate;
       orphans++
@@ -231,13 +311,13 @@ function sortLists()  {
       li.setAttribute("data-testid", `history-item-${orphans}`);
       //li.setAttribute("data-category", `Uncategorized`);
       li.setAttribute("data-date", date);
-      li.setAttribute("data-id", `${conversation.id}`);
+      li.setAttribute("data-id", `${item.id}`);
 
       li.innerHTML = `
         <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
-          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
-            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
-              ${conversation.title}
+          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${item.id}">
+            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${item.title}">
+              ${item.title}
             </div>
           </a>
         </div>
@@ -246,9 +326,11 @@ function sortLists()  {
       //console.log("li: ", li);
       olElement.appendChild(li);
       processedItems.add(li);
+      processedItems2.add(li);
     });
   }
-  console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems, "processedItems: ", processedItems);
+  console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems);
+  console.log("processedItems1: ", processedItems1, "processedItems2: ", processedItems2);
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
     categories[category].sort((a, b) => {
@@ -450,46 +532,6 @@ function initializeButtonClickListeners() {
   });
 }
 
-async function fetchConversations() {
-  //console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
-  if (isScriptLoading) return;
-  isScriptLoading = true;
-
-  try {
-    let updatedConversations = [];
-
-    if (shouldFetchMore) {
-      apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
-      console.log('apiOffset : ', apiOffset);
-
-      const token = sessionStorage.getItem('authToken');    // Retrieve the token from local storage
-      if (!token) throw new Error('Bearer token not found');
-
-      const response = await fetch(`/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`, {  headers: {'Authorization': `Bearer ${token}`}  });     // Add Authorization header and make the API call
-
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      const data = await response.json();
-      apiOffset += apiLimit;
-
-      sessionStorage.setItem('apiOffset', apiOffset);
-      const updatedConversations = mergeAndCleanConversations(managesessionStorage('get'), data.items.map(item => ({
-        ...item,
-        update_time: item.update_time ? new Date(item.update_time) : null,
-      })));
-      managesessionStorage('set', updatedConversations);
-
-      if (apiOffset >= data.total) {
-        shouldFetchMore = false;
-        console.log("All conversations have been fetched.");
-      }
-    }
-  } catch (error) {
-    console.error("Error fetching conversations:", error);
-  } finally {
-    isScriptLoading = false; // Ensure it's reset regardless of success or failure
-  }
-}
-
 // Helper function to manage local storage
 function managesessionStorage(action, conversations = []) {
   const storageKey = 'conversations';
@@ -498,27 +540,6 @@ function managesessionStorage(action, conversations = []) {
   } else if (action === 'set') {
     sessionStorage.setItem(storageKey, JSON.stringify(conversations));
   }
-}
-
-// Helper function to merge and clean conversations (removes duplicates)
-function mergeAndCleanConversations(existingConversations, newConversations) {
-  const combinedConversations = [...existingConversations, ...newConversations];
-  return removeDuplicates(combinedConversations);
-}
-
-// Helper function to remove duplicates based on the conversation ID
-function removeDuplicates(conversations) {
-  const uniqueConversations = [];
-  const seenIds = new Set();
-
-  conversations.forEach((conversation) => {
-    if (!seenIds.has(conversation.id)) {
-      seenIds.add(conversation.id);
-      uniqueConversations.push(conversation);
-    }
-  });
-
-  return uniqueConversations;
 }
 
 function removeObjectWithId(arr, id) {
