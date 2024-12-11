@@ -74,7 +74,6 @@ function repeater() {
         if (shouldFetchMore) {
           await fetchConversations();
         } else {
-          await afterFetch();
           await checkAndReplaceText();
           await sortLists();
         }
@@ -128,42 +127,22 @@ async function fetchConversations() {
         shouldFetchMore = false;
         console.log("All conversations have been fetched.");
       }
+    } else {
+
+      sessionStorage.setItem("fetched", JSON.stringify(fetchedConversations.items));
+      updatedConversations = mergeAndCleanConversations(storedConversations, fetchedConversations.items.map(item => ({
+        ...item,
+        update_time: item.update_time ? new Date(item.update_time) : null,
+      })));
+      managesessionStorage('set', updatedConversations);
+
+
     }
   } catch (error) {
     console.error("Error fetching conversations:", error);
   } finally {
     isScriptLoading = false; // Ensure it's reset regardless of success or failure
   }
-}
-
-async function afterFetch() {
-    sessionStorage.setItem("fetched", JSON.stringify(fetchedConversations));
-    updatedConversations = mergeAndCleanConversations(storedConversations, fetchedConversations.map(item => ({
-      ...item,
-      update_time: item.update_time ? new Date(item.update_time) : null,
-    })));
-    managesessionStorage('set', updatedConversations);
-}
-
-// Helper function to merge and clean conversations (removes duplicates)
-function mergeAndCleanConversations(existingConversations, newConversations) {
-  const combinedConversations = [...existingConversations, ...newConversations];
-  return removeDuplicates(combinedConversations);
-}
-
-// Helper function to remove duplicates based on the conversation ID
-function removeDuplicates(conversations) {
-  const uniqueConversations = [];
-  const seenIds = new Set();
-
-  conversations.forEach((conversation) => {
-    if (!seenIds.has(conversation.id)) {
-      seenIds.add(conversation.id);
-      uniqueConversations.push(conversation);
-    }
-  });
-
-  return uniqueConversations;
 }
 
 function checkAndReplaceText()  {
@@ -195,7 +174,7 @@ function checkAndReplaceText()  {
     let id;
     //console.log(textContent);
     conversations.forEach((item)  => {
-      if (item.title === textContent){
+      if (item.title == textContent){
         date = item.update_time
         id = item.id
       }});
@@ -228,36 +207,10 @@ function checkAndReplaceText()  {
   }
 }
 
-function sortLists()  {
-  console.log(`sortLists is starting!`);
-  const categories = {};
-  const uncategorizedItems = [];
-  const singleItems = []; // To collect single item categories
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-  if (!listContainer) return;
-
-  const originalOlLists = listContainer.querySelectorAll('ol');
-  const olListsToCategorize = Array.from(originalOlLists);
-
-  // Clear processedItems set to reflect the latest DOM structure
-  let processedItems = new Set();
-  let processedItems1 = new Set();
-  let processedItems2 = new Set();
-  let wordColors = {};
-  let conversations;
-  try {
-    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
-    getConversations = managesessionStorage('get') || {};
-    conversations = Array.from(getConversations);
-  } catch (e) {
-    console.error('Error parsing wordColors from sessionStorage:', e);
-  }
-
-  let totalitems = 0;
-  //console.log("olListsToCategorize: ", olListsToCategorize);
+function olListsCategorization(olListsToCategorize, totalitems, processedItems, conversations, categories, uncategorizedItems) {
   olListsToCategorize.forEach((ol) => {
     ol.setAttribute('style', 'display: block;');
-    //console.log("ol: ", ol);
+    console.log("ol: ", ol);
     const listItems = ol.querySelectorAll('li');
     listItems.forEach((item) => {
       totalitems++
@@ -269,40 +222,33 @@ function sortLists()  {
 
 
       let date2;
-      getConversations.forEach((item) => {
-        if(dataId === item.id) {
-          date2 = new Date(item.update_time);
+      getConversations.forEach((item2) => {
+        if (dataId === item2.id) {
+          console.log("%c 1 --> Line: 226||javascript.js\n dataId === item.id: ","color:#f0f;", dataId === item2.id);
+          date2 = new Date(item2.update_time);
+          console.log("%c 1 --> Line: 229||javascript.js\n date2: ","color:#f0f;", date2);
+          item.setAttribute("data-date", date2);
         }
       })
-      if(dateStr !== undefined)conversations = removeObjectWithId(conversations, dataId);
-      console.log("conversations: ", conversations.length, dataId);
-      const fallbackDate = new Date(0); // Epoch time for missing dates
-      const date = dateStr ? new Date(dateStr) : date2;
-
+      conversations = removeObjectWithId(conversations, dataId);
       if (category) {
         if (!categories[category]) categories[category] = [];
-        categories[category].push({ item, date });
+        categories[category].push({item, date2});
       } else {
-        uncategorizedItems.push({ item, date });
+        uncategorizedItems.push({item, date2});
       }
-      //console.log("item: ", item);
+      console.log("item: ", item);
       processedItems.add(item);
-      processedItems1.add(item);
     });
   });
-  //console.log("olListsToCategorize: ", olListsToCategorize);
+  return conversations;
+}
 
-  if (!olListsToCategorize[0]) {  // Create <ol> if it doesn't exist
-    olElement = document.createElement('ol');
-    olListsToCategorize.appendChild(olElement);
-  }
-  let olElement = olListsToCategorize[0];
-
+function processOrphans(conversations, olElement, processedItems, uncategorizedItems) {
   let orphans = 0;
   if (conversations && conversations.length > 0) {
-    conversations.forEach((item) => {
-      if (processedItems.has(item)) return;
-      const dateStr = item.update_time;
+    conversations.forEach((conversation) => {
+      const dateStr = conversation.update_time;
       const fallbackDate = new Date(0); // Epoch time for missing dates
       const date = dateStr ? new Date(dateStr) : fallbackDate;
       orphans++
@@ -311,26 +257,27 @@ function sortLists()  {
       li.setAttribute("data-testid", `history-item-${orphans}`);
       //li.setAttribute("data-category", `Uncategorized`);
       li.setAttribute("data-date", date);
-      li.setAttribute("data-id", `${item.id}`);
+      li.setAttribute("data-id", `${conversation.id}`);
 
       li.innerHTML = `
         <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
-          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${item.id}">
-            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${item.title}">
-              ${item.title}
+          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
+            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
+              ${conversation.title}
             </div>
           </a>
         </div>
       `;
 
-      //console.log("li: ", li);
+      console.log("li: ", li);
       olElement.appendChild(li);
       processedItems.add(li);
-      processedItems2.add(li);
     });
   }
-  console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems);
-  console.log("processedItems1: ", processedItems1, "processedItems2: ", processedItems2);
+  console.log("orphan item: ", orphans, "uncategorizedItems: ", uncategorizedItems, "processedItems: ", processedItems);
+}
+
+function sortingItems(categories) {
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
     categories[category].sort((a, b) => {
@@ -339,7 +286,9 @@ function sortLists()  {
       return b.date - a.date;
     });
   }
+}
 
+function uncatagorizedCatagory(uncategorizedItems) {
 // Deduplicate uncategorizedItems based on their data-id
   const uniqueUncategorizedItems = [];
   const seenIds = new Set();
@@ -358,6 +307,46 @@ function sortLists()  {
     if (!b.date) return -1;
     return b.date - a.date; // Most recent first
   });
+  return uniqueUncategorizedItems;
+}
+
+function sortLists()  {
+  console.log(`sortLists is starting!`);
+  const categories = {};
+  const uncategorizedItems = [];
+  const singleItems = []; // To collect single item categories
+  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+  if (!listContainer) return;
+
+  const originalOlLists = listContainer.querySelectorAll('ol');
+  const olListsToCategorize = Array.from(originalOlLists);
+
+  // Clear processedItems set to reflect the latest DOM structure
+  let processedItems = new Set();
+  let wordColors = {};
+  let conversations;
+  try {
+    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+    getConversations = managesessionStorage('get') || {};
+    conversations = Array.from(getConversations);
+  } catch (e) {
+    console.error('Error parsing wordColors from sessionStorage:', e);
+  }
+
+  let totalitems = 0;
+
+  conversations = olListsCategorization(olListsToCategorize, totalitems, processedItems, conversations, categories, uncategorizedItems);
+
+
+  if (!olListsToCategorize[0]) {  // Create <ol> if it doesn't exist
+    olElement = document.createElement('ol');
+    olListsToCategorize.appendChild(olElement);
+  }
+  let olElement = olListsToCategorize[0];
+
+  processOrphans(conversations, olElement, processedItems, uncategorizedItems);
+  sortingItems(categories);
+  const uniqueUncategorizedItems = uncatagorizedCatagory(uncategorizedItems);
 
   // Create a document fragment to hold new categorized <ol> elements
   const fragment = document.createDocumentFragment();
@@ -412,9 +401,7 @@ function sortLists()  {
     return dateB - dateA; // For descending order, use `dateB - dateA`
   });
 
-  console.log("Sorted categories by earliest date:", sortedCategories);
-
-// Clear and sort the fragment
+  //console.log("Sorted categories by earliest date:", sortedCategories);
 
 // Create categorized lists based on sorted categories and append them in order
   sortedCategories.forEach(({ category, items }) => {
@@ -567,6 +554,27 @@ function removeItemAll(arr, value) {
     }
   }
   return arr;
+}
+
+// Helper function to merge and clean conversations (removes duplicates)
+function mergeAndCleanConversations(existingConversations, newConversations) {
+  const combinedConversations = [...existingConversations, ...newConversations];
+  return removeDuplicates(combinedConversations);
+}
+
+// Helper function to remove duplicates based on the conversation ID
+function removeDuplicates(conversations) {
+  const uniqueConversations = [];
+  const seenIds = new Set();
+
+  conversations.forEach((conversation) => {
+    if (!seenIds.has(conversation.id)) {
+      seenIds.add(conversation.id);
+      uniqueConversations.push(conversation);
+    }
+  });
+
+  return uniqueConversations;
 }
 
 function addTitleBanner() {
