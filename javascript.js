@@ -35,6 +35,42 @@ let apiOrder = 'updated';
 let isScriptLoading = false;
 let shouldFetchMore = true; // Initially, allow fetching
 
+function createListItem(conversation, index) {
+  const li = document.createElement('li');
+  li.className = "relative";
+  li.setAttribute("data-testid", `history-item-${index}`);
+  li.setAttribute("data-date", conversation.update_time);
+  li.setAttribute("data-id", conversation.id);
+
+  li.innerHTML = `
+    <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: var(--sidebar-surface-primary);">
+      <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
+        <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
+          ${conversation.title}
+        </div>
+      </a>
+      <div class="absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 hidden can-hover:group-hover:flex">
+        <span data-state="closed">
+          <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${index}-options" type="button">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
+            </svg>
+          </button>
+        </span>
+      </div>
+    </div>
+  `;
+
+  return li;
+}
+
+function processOrphans(conversations, olElement) {
+  conversations.forEach((conversation, index) => {
+    const li = createListItem(conversation, index);
+    olElement.appendChild(li);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   addTitleBanner() ;
   repeater();
@@ -47,6 +83,8 @@ function repeater() {
     try {
       if (shouldFetchMore) {
         await fetchConversations();
+        await checkAndReplaceText();
+        await sortLists();
       } else {
         await checkAndReplaceText();
         await sortLists();
@@ -220,6 +258,7 @@ function sortLists() {
   let processedItems = new Set();
   let wordColors = {};
   let conversations;
+
   try {
     wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
     getConversations = managesessionStorage('get') || {};
@@ -276,32 +315,35 @@ function sortLists() {
 
   let orphans = 0;
   if (conversations && conversations.length > 0) {
-    conversations.forEach((conversation) => {
-      const dateStr = conversation.update_time;
-      const fallbackDate = new Date(0); // Epoch time for missing dates
-      const date = dateStr ? new Date(dateStr) : fallbackDate;
-      orphans++;
-      const li = document.createElement('li');
-      li.className = 'relative';
-      li.setAttribute('data-testid', `history-item-${orphans}`);
-      //li.setAttribute("data-category", `Uncategorized`);
-      li.setAttribute('data-date', date);
-      li.setAttribute('data-id', `${conversation.id}`);
+    processOrphans(conversations, olElement);
+    // conversations.forEach((conversation) => {
 
-      li.innerHTML = `
-        <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
-          <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
-            <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
-              ${conversation.title}
-            </div>
-          </a>
-        </div>
-      `;
 
-      //console.log("li: ", li);
-      olElement.appendChild(li);
-      processedItems.add(li);
-    });
+    //   const dateStr = conversation.update_time;
+    //   const fallbackDate = new Date(0); // Epoch time for missing dates
+    //   const date = dateStr ? new Date(dateStr) : fallbackDate;
+    //   orphans++;
+    //   const li = document.createElement('li');
+    //   li.className = 'relative';
+    //   li.setAttribute('data-testid', `history-item-${orphans}`);
+    //   //li.setAttribute("data-category", `Uncategorized`);
+    //   li.setAttribute('data-date', date);
+    //   li.setAttribute('data-id', `${conversation.id}`);
+
+    //   li.innerHTML = `
+    //     <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
+    //       <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
+    //         <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
+    //           ${conversation.title}
+    //         </div>
+    //       </a>
+    //     </div>
+    //   `;
+
+    //   //console.log("li: ", li);
+    //   olElement.appendChild(li);
+    //   processedItems.add(li);
+    // });
   }
   console.log("orphan item: ", orphans);
   console.log("uncategorizedItems: ", uncategorizedItems);
