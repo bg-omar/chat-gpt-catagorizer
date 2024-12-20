@@ -1,5 +1,6 @@
 /* Set the body or main container to 100% width */
-body, html {
+body,
+html {
 	width: 100%;
 }
 
@@ -13,7 +14,19 @@ ol {
 }
 
 /* Target the chat container and force it to occupy the full width */
-.mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
+.mx-auto,
+.flex,
+.flex-1,
+.gap-4,
+.text-base,
+.md,
+.lg:gap-6,
+.md,
+.lg,
+.xl,
+.lg,
+.w-full,
+.mx-auto {
 	width: 90% !important;
 	max-width: 90% !important;
 	min-width: 90% !important;
