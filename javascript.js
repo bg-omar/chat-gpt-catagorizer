@@ -72,7 +72,6 @@ function processOrphans(conversations, olElement) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  addTitleBanner() ;
   repeater();
   initializeMutationObserver();
   initializeButtonClickListeners();
@@ -82,10 +81,11 @@ function repeater() {
   const firstSort = setInterval(async () => {
     try {
       if (shouldFetchMore) {
-        await fetchConversations();
         await checkAndReplaceText();
         await sortLists();
+        await fetchConversations();
       } else {
+        await  addTitleBanner() ;
         await checkAndReplaceText();
         await sortLists();
       }
@@ -99,6 +99,7 @@ function repeater() {
 
     setInterval(async () => {
       try {
+        await  addTitleBanner() ;
         await checkAndReplaceText();
         await sortLists();
       } catch (e) {
@@ -244,6 +245,53 @@ function checkAndReplaceText() {
   }
 }
 
+function collectSingleItems(categories, singleItems, fragment) {
+  // Separate out single-item categories
+  const sortedCategories = [];
+  for (const category in categories) {
+    if (categories[category].length === 1) {
+      singleItems.push(...categories[category]);
+    } else {
+      // Store categories along with the earliest date in their items
+      const earliestDate = categories[category]
+          .filter((item) => item.date instanceof Date && !isNaN(item.date))
+          .reduce(
+              (earliest, current) =>
+                  !earliest || current.date < earliest ? current.date : earliest,
+              null
+          );
+
+      console.log('Earliest Date for category:', category, earliestDate);
+
+      const mostRecentDate = categories[category]
+          .filter((item) => item.date instanceof Date && !isNaN(item.date))
+          .reduce(
+              (mostRecent, current) =>
+                  !mostRecent || current.date > mostRecent
+                      ? current.date
+                      : mostRecent,
+              null
+          );
+
+      sortedCategories.push({
+        category,
+        items: categories[category].map((itemObj) => itemObj.item),
+        earliestDate: mostRecentDate, // Now reflects the most recent date
+      });
+    }
+  }
+
+  // Create a "Single Items" section for all single-item categories
+  if (singleItems.length > 0) {
+    const singleItemsOlContainer = createCategoryContainer(
+        'Single Items',
+        singleItems.map((itemObj) => itemObj.item)
+    );
+    fragment.appendChild(singleItemsOlContainer);
+  }
+  return sortedCategories;
+}
+
 function sortLists() {
   const categories = {};
   const uncategorizedItems = [];
@@ -316,34 +364,6 @@ function sortLists() {
   let orphans = 0;
   if (conversations && conversations.length > 0) {
     processOrphans(conversations, olElement);
-    // conversations.forEach((conversation) => {
-
-
-    //   const dateStr = conversation.update_time;
-    //   const fallbackDate = new Date(0); // Epoch time for missing dates
-    //   const date = dateStr ? new Date(dateStr) : fallbackDate;
-    //   orphans++;
-    //   const li = document.createElement('li');
-    //   li.className = 'relative';
-    //   li.setAttribute('data-testid', `history-item-${orphans}`);
-    //   //li.setAttribute("data-category", `Uncategorized`);
-    //   li.setAttribute('data-date', date);
-    //   li.setAttribute('data-id', `${conversation.id}`);
-
-    //   li.innerHTML = `
-    //     <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
-    //       <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
-    //         <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
-    //           ${conversation.title}
-    //         </div>
-    //       </a>
-    //     </div>
-    //   `;
-
-    //   //console.log("li: ", li);
-    //   olElement.appendChild(li);
-    //   processedItems.add(li);
-    // });
   }
   console.log("orphan item: ", orphans);
   console.log("uncategorizedItems: ", uncategorizedItems);
@@ -386,50 +406,7 @@ function sortLists() {
     );
     fragment.appendChild(uncategorizedOlContainer);
   }
-
-  // Separate out single-item categories
-  const sortedCategories = [];
-  for (const category in categories) {
-    if (categories[category].length === 1) {
-      singleItems.push(...categories[category]);
-    } else {
-      // Store categories along with the earliest date in their items
-      const earliestDate = categories[category]
-          .filter((item) => item.date instanceof Date && !isNaN(item.date))
-          .reduce(
-              (earliest, current) =>
-                  !earliest || current.date < earliest ? current.date : earliest,
-              null
-          );
-
-      console.log('Earliest Date for category:', category, earliestDate);
-
-      const mostRecentDate = categories[category]
-          .filter((item) => item.date instanceof Date && !isNaN(item.date))
-          .reduce(
-              (mostRecent, current) =>
-                  !mostRecent || current.date > mostRecent
-                      ? current.date
-                      : mostRecent,
-              null
-          );
-
-      sortedCategories.push({
-        category,
-        items: categories[category].map((itemObj) => itemObj.item),
-        earliestDate: mostRecentDate, // Now reflects the most recent date
-      });
-    }
-  }
-
-  // Create a "Single Items" section for all single-item categories
-  if (singleItems.length > 0) {
-    const singleItemsOlContainer = createCategoryContainer(
-        'Single Items',
-        singleItems.map((itemObj) => itemObj.item)
-    );
-    fragment.appendChild(singleItemsOlContainer);
-  }
+  const sortedCategories = collectSingleItems(categories, singleItems, fragment);
 
   // Sort categories by the earliest date among their items (ascending order)
   sortedCategories.sort((a, b) => {
@@ -465,7 +442,6 @@ function sortLists() {
   initializeButtonClickListeners();
   reinitializeDropdowns();
 }
-
 function addTitleBanner() {
   // Extract the item ID from the URL
   const currentItemId = new URL(window.location.href).pathname.split("/c/")[1];
@@ -480,16 +456,51 @@ function addTitleBanner() {
   // If no matching conversation is found, skip
   if (!currentConversation) return;
 
-  // Create the title banner
-  const banner = document.createElement("div");
-  banner.id = "title-banner";
-  banner.style.cssText = `
-    
-  `;
-  banner.textContent = currentConversation.title;
+  // Check if the banner already exists
+  let banner = document.getElementById("title-banner");
 
-  // Add the banner to the document
-  document.body.prepend(banner);
+  // Retrieve colors from sessionStorage
+  let wordColors = {};
+  try {
+    wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
+  } catch (e) {
+    console.error("Error parsing wordColors from sessionStorage:", e);
+    wordColors = {};
+  }
+
+  // Apply coloring logic to the title
+  const regex = /\b(\w+)\b/g; // Match words
+  let coloredTitle = currentConversation.title.replace(regex, (match) => {
+    if (wordColors[match]) {
+      return `<span style="color: ${wordColors[match]}; border: 1px dotted ${wordColors[match]}">${match}</span>`;
+    }
+    return match; // Leave words without a matching color unstyled
+  });
+
+  // If banner exists, update its content; otherwise, create a new one
+  if (banner) {
+    banner.innerHTML = coloredTitle;
+  } else {
+    banner = document.createElement("div");
+    banner.id = "title-banner";
+    banner.style.cssText = `
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      width: 100%;
+      padding: 0 20px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	border: 1px dotted ;
+      background-color: #202;
+      white-space: nowrap;
+    `;
+    banner.innerHTML = coloredTitle;
+
+    // Add the banner to the document
+    document.body.prepend(banner);
+  }
 }
 
 
