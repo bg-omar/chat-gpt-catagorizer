@@ -102,7 +102,7 @@ function triggerScrollAndEvent() {
     return;
   }
 
-  if (apiOffset < (dataTotal - 28)) {
+  if (apiOffset < (dataTotal)) {
 
     // Check if the container can scroll further
     if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
@@ -268,7 +268,7 @@ function collectSingleItems(categories, singleItems, fragment) {
 
 function sortLists() {
   console.log("offset: ", apiOffset," total: ", dataTotal)
-  if (apiOffset >= (dataTotal - 28)) {
+  if (apiOffset >= (dataTotal)) {
     const categories = {};
     const uncategorizedItems = [];
     const singleItems = []; // To collect single item categories
