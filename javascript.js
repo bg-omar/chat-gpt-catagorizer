@@ -618,12 +618,6 @@ function reinitializeDropdowns() {
       }
     });
   });
-
-  // document.body.addEventListener('click', () => {
-  //   document.querySelectorAll('.dropdown-menu').forEach((menu) => {
-  //     menu.style.display = 'none';
-  //   });
-  // });
 }
 
 // Helper function to manage local storage
