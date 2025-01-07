@@ -226,17 +226,6 @@ function collectSingleItems(categories, singleItems, fragment) {
     if (categories[category].length === 1) {
       singleItems.push(...categories[category]);
     } else {
-      // Store categories along with the earliest date in their items
-      const earliestDate = categories[category]
-          .filter((item) => item.date instanceof Date && !isNaN(item.date))
-          .reduce(
-              (earliest, current) =>
-                  !earliest || current.date < earliest ? current.date : earliest,
-              null
-          );
-
-      console.log('Earliest Date for category:', category, earliestDate);
-
       const mostRecentDate = categories[category]
           .filter((item) => item.date instanceof Date && !isNaN(item.date))
           .reduce(
@@ -247,10 +236,11 @@ function collectSingleItems(categories, singleItems, fragment) {
               null
           );
 
+      console.log('Most Recent Date for category:', category, mostRecentDate);
       sortedCategories.push({
         category,
         items: categories[category].map((itemObj) => itemObj.item),
-        earliestDate: mostRecentDate, // Now reflects the most recent date
+        mostRecentDate: mostRecentDate, // Now reflects the most recent date
       });
     }
   }
@@ -329,7 +319,7 @@ function sortLists() {
         } else {
           uncategorizedItems.push({item, date});
         }
-        console.log("processedItems added: ", item);
+        // console.log("processedItems added: ", item);
         processedItems.add(item);
       });
     });
@@ -347,8 +337,8 @@ function sortLists() {
     if (conversations && conversations.length > 0) {
       processOrphans(conversations, olElement);
     }
-    console.log("orphan item: ", orphans);
-    console.log("uncategorizedItems: ", uncategorizedItems);
+    // console.log("orphan item: ", orphans);
+    // console.log("uncategorizedItems: ", uncategorizedItems);
     // Sort items within categories by date (ascending order)
     for (const category in categories) {
       categories[category].sort((a, b) => {
@@ -392,8 +382,8 @@ function sortLists() {
 
     // Sort categories by the earliest date among their items (ascending order)
     sortedCategories.sort((a, b) => {
-      const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
-      const dateB = b.earliestDate || new Date(0);
+      const dateA = a.mostRecentDate || new Date(0); // Fallback to earliest possible date if undefined
+      const dateB = b.mostRecentDate || new Date(0);
       return dateB - dateA; // For descending order, use `dateB - dateA`
     });
 
