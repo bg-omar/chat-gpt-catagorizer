@@ -1,39 +1,51 @@
+let isScriptEnabled = localStorage.getItem('isScriptEnabled') || true; // Default state
+let dataTotal;
+let shouldFetchMore = true; // Initially, allow fetching
+let apiOffset = 0;
+
 (function () {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
     const [resource, config] = args;
 
-    if (config && config.headers) {
-      // Check if headers is a Headers instance or a plain object
-      let token = null;
-      if (config.headers instanceof Headers) {
-        if (config.headers.has('Authorization')) {
-          // For Headers object
-          const authHeader = config.headers.get('Authorization');
-          if (authHeader.startsWith('Bearer '))
-            token = authHeader.split(' ')[1];
-        }
-      } else if (typeof config.headers === 'object') {
-        const authHeader = config.headers['Authorization']; // For plain object
-        if (authHeader && authHeader.startsWith('Bearer '))
-          token = authHeader.split(' ')[1];
-      }
-      if (token) {
-        //console.log("Captured Bearer token from request:", token);
-        sessionStorage.setItem('authToken', token);
-      }
+    const response = await originalFetch(...args);
+
+    // Intercept the API calls for conversations
+    if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
+      const clonedResponse = response.clone(); // Clone the response to read it without consuming it
+      const data = await clonedResponse.json();
+
+      // Store the API data in localStorage
+      const existingData = JSON.parse(localStorage.getItem("conversations")) || [];
+      const newConversations = data.items.map((item) => ({
+        ...item,
+        update_time: item.update_time ? new Date(item.update_time) : null,
+      }));
+
+      const mergedConversations = mergeAndCleanConversations(existingData, newConversations);
+      localStorage.setItem("conversations", JSON.stringify(mergedConversations));
+
+      // Save the offset to avoid re-fetching the same data
+      apiOffset = data.offset + data.limit;
+      dataTotal = data.total;
     }
 
-    const response = await originalFetch(...args);
     return response;
   };
 })();
 
-sessionStorage.setItem('apiOffset', 0);
-let apiLimit = 56; // Matches API's default
-let apiOrder = 'updated';
-let isScriptLoading = false;
-let shouldFetchMore = true; // Initially, allow fetching
+function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
+  const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5');
+  if (container) {
+    console.log('Container loaded.');
+    callback();
+  } else if (retryCount < maxRetries) {
+    console.log('Waiting for container...');
+    setTimeout(() => waitForContainerToLoad(callback, maxRetries, retryCount + 1), 100);
+  } else {
+    console.error('Max retries reached. Container not found.');
+  }
+}
 
 function createListItem(conversation, index) {
   const li = document.createElement('li');
@@ -43,7 +55,7 @@ function createListItem(conversation, index) {
   li.setAttribute("data-id", conversation.id);
 
   li.innerHTML = `
-    <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: var(--sidebar-surface-primary);">
+    <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: #171717;">
       <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
         <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
           ${conversation.title}
@@ -51,7 +63,7 @@ function createListItem(conversation, index) {
       </a>
       <div class="absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 hidden can-hover:group-hover:flex">
         <span data-state="closed">
-          <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${index}-options" type="button">
+          <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${index}-options" type="button" id="radix-${index}" aria-haspopup="menu" aria-expanded="true" data-state="open" aria-controls="radix-${index}">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
               <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
             </svg>
@@ -72,23 +84,51 @@ function processOrphans(conversations, olElement) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  repeater();
-  initializeMutationObserver();
-  initializeButtonClickListeners();
+  if (isScriptEnabled){
+    repeater();
+    initializeMutationObserver();
+    initializeButtonClickListeners();
+  }
 });
+
+function triggerScrollAndEvent() {
+  // Find the scrolling container
+  const scrollContainer = document.querySelector(
+      '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
+  );
+
+  if (!scrollContainer) {
+    console.error('Scrolling container not found.');
+    return;
+  }
+
+  if (apiOffset < (dataTotal - 28)) {
+
+    // Check if the container can scroll further
+    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
+      // If at the bottom, scroll back to the top
+      scrollContainer.scrollTop = 0;
+      // Dispatch the scroll event to trigger the website's fetching logic
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+      console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+    }
+    // Otherwise, scroll down by a fixed amount
+    scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
+    // Dispatch the scroll event to trigger the website's fetching logic
+    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+  }
+}
 
 function repeater() {
   const firstSort = setInterval(async () => {
     try {
-      if (shouldFetchMore) {
-        await checkAndReplaceText();
-        await sortLists();
-        await fetchConversations();
-      } else {
-        await  addTitleBanner() ;
-        await checkAndReplaceText();
-        await sortLists();
-      }
+      await triggerScrollAndEvent(); // Simulate the scroll event
+      await addTitleBanner();
+      await checkAndReplaceText();
+      await sortLists();
+      await validateListItems();
+
     } catch (e) {
       console.error('Error in sortLists interval:', e);
     }
@@ -99,9 +139,11 @@ function repeater() {
 
     setInterval(async () => {
       try {
-        await  addTitleBanner() ;
+        await triggerScrollAndEvent(); // Simulate the scroll event
+        await addTitleBanner();
         await checkAndReplaceText();
         await sortLists();
+        await validateListItems();
       } catch (e) {
         console.error(
             'Error in checkAndReplaceText interval after timeout:',
@@ -112,52 +154,6 @@ function repeater() {
   }, 30000);
 }
 
-async function fetchConversations() {
-  //console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading, 'shouldFetchMore: ', shouldFetchMore);
-  if (isScriptLoading) return;
-  isScriptLoading = true;
-
-  try {
-    let updatedConversations = [];
-
-    if (shouldFetchMore) {
-      apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
-      console.log('apiOffset : ', apiOffset);
-
-      const token = sessionStorage.getItem('authToken'); // Retrieve the token from local storage
-      if (!token) throw new Error('Bearer token not found');
-
-      const response = await fetch(
-          `/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-      ); // Add Authorization header and make the API call
-
-      if (!response.ok) throw new Error('Failed to fetch conversations');
-      const data = await response.json();
-      apiOffset += apiLimit;
-
-      sessionStorage.setItem('apiOffset', apiOffset);
-      const updatedConversations = mergeAndCleanConversations(
-          managesessionStorage('get'),
-          data.items.map((item) => ({
-            ...item,
-            update_time: item.update_time ? new Date(item.update_time) : null,
-          }))
-      );
-      managesessionStorage('set', updatedConversations);
-
-      if (apiOffset >= data.total) {
-        shouldFetchMore = false;
-        console.log('All conversations have been fetched.');
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching conversations:', error);
-  } finally {
-    isScriptLoading = false; // Ensure it's reset regardless of success or failure
-  }
-}
-
 function checkAndReplaceText() {
   const divElements = document.querySelectorAll(
       '.relative.grow.overflow-hidden.whitespace-nowrap'
@@ -165,32 +161,14 @@ function checkAndReplaceText() {
   if (divElements.length === 0) return;
 
   const colors = [
-    '#f0f',
-    '#FF7E00',
-    '#64edd3',
-    '#0f0',
-    '#3cc',
-    '#ff0',
-    '#f00',
-    '#0ff',
-    '#336699',
-    'gray',
-    'silver',
-    '#CC99FF',
-    '#6633FF',
-    '#66FF99',
-    '#FF6633',
-    '#66CCCC',
-    '#33CC33',
-    'red',
-    'purple',
-    'green',
-    'lime',
-    'olive',
-    'yellow',
-    'blue',
-    'teal',
-    'aqua',
+    '#f0f', '#FF7E00', '#64edd3', '#0f0', '#3cc', '#ff0', '#f00', '#0ff',
+    '#336699', 'gray', 'silver', '#CC99FF', '#6633FF', '#66FF99', '#FF6633',
+    '#66CCCC', '#33CC33', 'red', 'purple', 'green', 'lime', 'olive', 'yellow',
+    'blue', 'teal', 'aqua', '#FFC0CB', '#8A2BE2', '#5F9EA0', '#7FFF00',
+    '#DC143C', '#00FFFF', '#FFD700', '#ADFF2F', '#4B0082', '#FF4500',
+    '#DA70D6', '#EE82EE', '#20B2AA', '#BA55D3', '#4682B4', '#D2691E',
+    '#40E0D0', '#6A5ACD', '#B22222', '#808000', '#708090', '#8B4513',
+    '#FF1493', '#00FA9A', '#B0C4DE', '#F5DEB3', '#00CED1'
   ];
   let colorIndex = 0;
   let wordColors = {};
@@ -204,19 +182,17 @@ function checkAndReplaceText() {
   }
 
   divElements.forEach((divElement) => {
-    if (divElement.querySelector('span')) return;
-
     let textContent = divElement.textContent;
-    let date;
-    let id;
-    //console.log(textContent);
     conversations.forEach((item) => {
-      if (item.title == textContent) {
-        date = item.update_time;
-        id = item.id;
+      if (item.title === textContent) {
+        console.log("update_time: ", item.update_time.trim(), "id: ", item.id.trim());
+        divElement.closest('li')?.setAttribute('data-date', item.update_time.trim());
+        divElement.closest('li')?.setAttribute('data-id', item.id.trim());
       }
     });
-    //console.log("date: ", date);
+
+    if (divElement.querySelector('span')) return;
+
     const regex = /\[(.*?)\]/g;
 
     const newText = textContent.replace(regex, (match, word) => {
@@ -230,8 +206,6 @@ function checkAndReplaceText() {
     const match = regex.exec(textContent);
     if (match && match[1]) {
       divElement.closest('li')?.setAttribute('data-category', match[1].trim());
-      divElement.closest('li')?.setAttribute('data-date', date);
-      divElement.closest('li')?.setAttribute('data-id', id);
     }
 
     divElement.innerHTML = newText;
@@ -293,155 +267,165 @@ function collectSingleItems(categories, singleItems, fragment) {
 }
 
 function sortLists() {
-  const categories = {};
-  const uncategorizedItems = [];
-  const singleItems = []; // To collect single item categories
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-  if (!listContainer) return;
+  console.log("offset: ", apiOffset," total: ", dataTotal)
+  if (apiOffset >= (dataTotal - 28)) {
+    const categories = {};
+    const uncategorizedItems = [];
+    const singleItems = []; // To collect single item categories
+    const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+    if (!listContainer) return;
 
-  const originalOlLists = listContainer.querySelectorAll('ol');
-  const olListsToCategorize = Array.from(originalOlLists);
+    const originalOlLists = listContainer.querySelectorAll('ol');
+    const olListsToCategorize = Array.from(originalOlLists);
 
-  // Clear processedItems set to reflect the latest DOM structure
-  let processedItems = new Set();
-  let wordColors = {};
-  let conversations;
+    // Clear processedItems set to reflect the latest DOM structure
+    let processedItems = new Set();
+    let wordColors = {};
+    let conversations;
 
-  try {
-    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
-    getConversations = managesessionStorage('get') || {};
-    conversations = Array.from(getConversations);
-  } catch (e) {
-    console.error('Error parsing wordColors from sessionStorage:', e);
-  }
+    try {
+      wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+      getConversations = managesessionStorage('get') || {};
+      conversations = Array.from(getConversations);
+    } catch (e) {
+      console.error('Error parsing wordColors from sessionStorage:', e);
+    }
 
-  let totalitems = 0;
-  //console.log("olListsToCategorize: ", olListsToCategorize);
-  olListsToCategorize.forEach((ol) => {
-    ol.setAttribute('style', 'display: block;');
-    //console.log("ol: ", ol);
-    const listItems = ol.querySelectorAll('li');
-    listItems.forEach((item) => {
-      totalitems++;
-      if (processedItems.has(item)) return;
-
-      const category = item.getAttribute('data-category');
-      let dateStr = item.getAttribute('data-date');
-      const dataId = item.getAttribute('data-id');
-
-      let date2;
-      getConversations.forEach((item) => {
-        if (dataId === item.id) {
-          date2 = new Date(item.update_time);
+    let totalitems = 0;
+    // console.log("olListsToCategorize: ", olListsToCategorize);
+    olListsToCategorize.forEach((ol) => {
+      ol.setAttribute('style', 'display: block;');
+      // console.log("ol: ", ol);
+      const listItems = ol.querySelectorAll('li');
+      listItems.forEach((item) => {
+        totalitems++;
+        if (processedItems.has(item)) return;
+        // console.log("%c 5 --> Line: 312||javascript.js\n item: ", "color:#0ff;", item);
+        const category = item.getAttribute('data-category');
+        let dateStr = item.getAttribute('data-date');
+        const dataId = item.getAttribute('data-id');
+        // console.log("%c 5 --> Line: 316||javascript.js\n item: ", "color:#0ff;", item);
+        let date2;
+        getConversations.forEach((item) => {
+          if (dataId === item.id) {
+            date2 = new Date(item.update_time);
+          }
+        });
+        if (dateStr !== undefined) {
+          conversations = removeObjectWithId(conversations, dataId);
+          // console.log("conversation removed: ", conversations.length, dataId);
         }
+        // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
+        const fallbackDate = (date2 !== undefined) ? date2 : new Date(0); // Epoch time for missing dates
+        const date = (date2 !== undefined)
+            ? date2
+            : dateStr
+                ? new Date(dateStr)
+                : fallbackDate;
+        // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
+        if (category) {
+          if (!categories[category]) categories[category] = [];
+          categories[category].push({item, date});
+        } else {
+          uncategorizedItems.push({item, date});
+        }
+        console.log("processedItems added: ", item);
+        processedItems.add(item);
       });
-      if (dateStr !== undefined)
-        conversations = removeObjectWithId(conversations, dataId);
-      //console.log("conversations: ", conversations.length, dataId);
-      const fallbackDate = new Date(0); // Epoch time for missing dates
-      const date = dateStr ? new Date(dateStr) : fallbackDate;
-
-      if (category) {
-        if (!categories[category]) categories[category] = [];
-        categories[category].push({ item, date });
-      } else {
-        uncategorizedItems.push({ item, date });
-      }
-      //console.log("item: ", item);
-      processedItems.add(item);
     });
-  });
-  console.log('olListsToCategorize: ', olListsToCategorize);
+    // console.log('olListsToCategorize: ', olListsToCategorize);
 
-  // Ensure there's an <ol> element in the container.
-  if (!olListsToCategorize[0]) {
-    // Create <ol> if it doesn't exist
-    olElement = document.createElement('ol');
-    olListsToCategorize.appendChild(olElement);
-  }
-  let olElement = olListsToCategorize[0];
+    // Ensure there's an <ol> element in the container.
+    if (!olListsToCategorize[0]) {
+      // Create <ol> if it doesn't exist
+      olElement = document.createElement('ol');
+      olListsToCategorize.appendChild(olElement);
+    }
+    let olElement = olListsToCategorize[0];
 
-  let orphans = 0;
-  if (conversations && conversations.length > 0) {
-    processOrphans(conversations, olElement);
-  }
-  console.log("orphan item: ", orphans);
-  console.log("uncategorizedItems: ", uncategorizedItems);
-  // Sort items within categories by date (ascending order)
-  for (const category in categories) {
-    categories[category].sort((a, b) => {
+    let orphans = 0;
+    if (conversations && conversations.length > 0) {
+      processOrphans(conversations, olElement);
+    }
+    console.log("orphan item: ", orphans);
+    console.log("uncategorizedItems: ", uncategorizedItems);
+    // Sort items within categories by date (ascending order)
+    for (const category in categories) {
+      categories[category].sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return b.date - a.date;
+      });
+    }
+
+    // Deduplicate uncategorizedItems based on their data-id
+    const uniqueUncategorizedItems = [];
+    const seenIds = new Set();
+
+    uncategorizedItems.forEach((itemObj) => {
+      const itemId = itemObj.item.getAttribute('data-id');
+      if (!seenIds.has(itemId)) {
+        seenIds.add(itemId);
+        uniqueUncategorizedItems.push(itemObj);
+      }
+    });
+
+    // Sort by most recent date
+    uniqueUncategorizedItems.sort((a, b) => {
       if (!a.date) return 1;
       if (!b.date) return -1;
-      return b.date - a.date;
+      return b.date - a.date; // Most recent first
     });
-  }
 
-  // Deduplicate uncategorizedItems based on their data-id
-  const uniqueUncategorizedItems = [];
-  const seenIds = new Set();
+    // Create a document fragment to hold new categorized <ol> elements
+    const fragment = document.createDocumentFragment();
 
-  uncategorizedItems.forEach((itemObj) => {
-    const itemId = itemObj.item.getAttribute('data-id');
-    if (!seenIds.has(itemId)) {
-      seenIds.add(itemId);
-      uniqueUncategorizedItems.push(itemObj);
+    // Create "Uncategorized" section first
+    if (uncategorizedItems.length > 0) {
+      const uncategorizedOlContainer = createCategoryContainer(
+          'Uncategorized',
+          uncategorizedItems.map((itemObj) => itemObj.item)
+      );
+      fragment.appendChild(uncategorizedOlContainer);
     }
-  });
+    const sortedCategories = collectSingleItems(categories, singleItems, fragment);
 
-  // Sort by most recent date
-  uniqueUncategorizedItems.sort((a, b) => {
-    if (!a.date) return 1;
-    if (!b.date) return -1;
-    return b.date - a.date; // Most recent first
-  });
+    // Sort categories by the earliest date among their items (ascending order)
+    sortedCategories.sort((a, b) => {
+      const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
+      const dateB = b.earliestDate || new Date(0);
+      return dateB - dateA; // For descending order, use `dateB - dateA`
+    });
 
-  // Create a document fragment to hold new categorized <ol> elements
-  const fragment = document.createDocumentFragment();
+    console.log('Sorted categories by earliest date:', sortedCategories);
 
-  // Create "Uncategorized" section first
-  if (uncategorizedItems.length > 0) {
-    const uncategorizedOlContainer = createCategoryContainer(
-        'Uncategorized',
-        uncategorizedItems.map((itemObj) => itemObj.item)
-    );
-    fragment.appendChild(uncategorizedOlContainer);
+    // Clear and sort the fragment
+
+    // Create categorized lists based on sorted categories and append them in order
+    sortedCategories.forEach(({category, items}) => {
+      const newOlContainer = createCategoryContainer(
+          category,
+          items,
+          wordColors[category]
+      );
+      fragment.appendChild(newOlContainer);
+    });
+
+    // Clear all existing <ol> elements from the container, except the first one
+    listContainer.querySelectorAll('ol').forEach((ol, index) => {
+      if (index > 0) {
+        ol.parentElement?.remove();
+      }
+    });
+
+    listContainer.appendChild(fragment);
+
+    // Reinitialize button listeners and dropdowns after sorting
+    initializeButtonClickListeners();
+    reinitializeDropdowns();
   }
-  const sortedCategories = collectSingleItems(categories, singleItems, fragment);
-
-  // Sort categories by the earliest date among their items (ascending order)
-  sortedCategories.sort((a, b) => {
-    const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
-    const dateB = b.earliestDate || new Date(0);
-    return dateB - dateA; // For descending order, use `dateB - dateA`
-  });
-
-  console.log('Sorted categories by earliest date:', sortedCategories);
-
-  // Clear and sort the fragment
-
-  // Create categorized lists based on sorted categories and append them in order
-  sortedCategories.forEach(({ category, items }) => {
-    const newOlContainer = createCategoryContainer(
-        category,
-        items,
-        wordColors[category]
-    );
-    fragment.appendChild(newOlContainer);
-  });
-
-  // Clear all existing <ol> elements from the container, except the first one
-  listContainer.querySelectorAll('ol').forEach((ol, index) => {
-    if (index > 0) {
-      ol.parentElement?.remove();
-    }
-  });
-
-  listContainer.appendChild(fragment);
-
-  // Reinitialize button listeners and dropdowns after sorting
-  initializeButtonClickListeners();
-  reinitializeDropdowns();
 }
+
 function addTitleBanner() {
   // Extract the item ID from the URL
   const currentItemId = new URL(window.location.href).pathname.split("/c/")[1];
@@ -484,6 +468,7 @@ function addTitleBanner() {
     banner = document.createElement("div");
     banner.id = "title-banner";
     banner.style.cssText = `
+      position: fixed;
       font-size: 18px;
       font-weight: bold;
       text-align: center;
@@ -491,8 +476,8 @@ function addTitleBanner() {
       padding: 0 20px;
       overflow: hidden;
       text-overflow: ellipsis;
-      	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-	border: 1px dotted ;
+      box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+      border: 1px dotted;
       background-color: #202;
       white-space: nowrap;
     `;
@@ -502,8 +487,6 @@ function addTitleBanner() {
     document.body.prepend(banner);
   }
 }
-
-
 
 function createCategoryContainer(category, items, color) {
   const newOlContainer = document.createElement('div');
@@ -563,7 +546,8 @@ function initializeMutationObserver() {
   const targetNode = document.querySelector(
       '.relative.grow.overflow-hidden.whitespace-nowrap'
   );
-  const config = { childList: true, subtree: true, characterData: true };
+
+  const config = {childList: true, subtree: true, characterData: true};
 
   const callback = (mutationsList) => {
     // Use a flag to prevent recursive triggering of the observer
@@ -576,7 +560,14 @@ function initializeMutationObserver() {
       ) {
         isObserving = false;
         try {
+          // Check and replace text and sort after DOM changes
+          //reinitializeHoverStates();
           checkAndReplaceText();
+          sortLists();
+          //validateListItems();
+
+          // Handle chat renames
+          //renameChatHandler(mutation);
         } catch (e) {
           console.error('Error in mutation callback:', e);
         } finally {
@@ -605,17 +596,35 @@ function initializeButtonClickListeners() {
 }
 
 function handleButtonClick(button) {
-  console.log(`Button with ID ${button.id} was clicked!`);
-  // Additional functionality can be added here
+  const buttonId = button.id || "No ID";
+  console.log(`Button with ID ${buttonId} was clicked!`);
+
+  if (buttonId === "No ID") {
+    console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
+  }
 }
 
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
     // Custom initialization or reattachment logic as needed by the dropdown library
   });
+  document.querySelectorAll('[data-testid$="-options"]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const dropdown = button.closest('li').querySelector('.dropdown-menu');
+      if (dropdown) {
+        dropdown.style.display =
+            dropdown.style.display === 'block' ? 'none' : 'block';
+      }
+    });
+  });
+
+  // document.body.addEventListener('click', () => {
+  //   document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+  //     menu.style.display = 'none';
+  //   });
+  // });
 }
-
-
 
 // Helper function to manage local storage
 function managesessionStorage(action, conversations = []) {
@@ -655,22 +664,12 @@ function removeObjectWithId(arr, id) {
   return arrCopy;
 }
 
-function removeItemOnce(arr, value) {
-  var index = arr.indexOf(value);
-  if (index > -1) {
-    arr.splice(index, 1);
-  }
-  return arr;
-}
-
-function removeItemAll(arr, value) {
-  var i = 0;
-  while (i < arr.length) {
-    if (arr[i] === value) {
-      arr.splice(i, 1);
-    } else {
-      ++i;
+function validateListItems() {
+  const listItems = document.querySelectorAll('li[data-testid]');
+  listItems.forEach((item) => {
+    const button = item.querySelector('button');
+    if (!button) {
+      console.error(`List item with ID ${item.getAttribute('data-id')} is missing a button.`);
     }
-  }
-  return arr;
+  });
 }
