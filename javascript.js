@@ -29,10 +29,9 @@ let apiOffset = 0;
 
       const mergedConversations = mergeAndCleanConversations(existingData, newConversations);
       sessionStorage.setItem("conversations", JSON.stringify(mergedConversations));
-
+      sessionStorage.setItem("apiOffset", JSON.stringify(apiOffset));
       // Save the offset to avoid re-fetching the same data
       apiOffset = data.offset + data.limit;
-      
     }
 
     return response;
@@ -46,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function repeater() {
+    if (apiOffset < (JSON.parse(sessionStorage.getItem('dataTotal')))) {
   const firstSort = setInterval(async () => {
     try {
       await getStates();
@@ -66,8 +66,7 @@ function repeater() {
       console.error('Error in sortLists interval:', e);
     }
   }, 5000);
-
-  setTimeout(() => {
+} else {
     clearInterval(firstSort);
 
     setInterval(async () => {
@@ -92,13 +91,14 @@ function repeater() {
         );
       }
     }, 90000);
-  }, 30000);
+  }
 }
 
 function getStates() {
      isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
      isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')); 
      isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
+     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')) ; 
 }
 
 function setStates() {
