@@ -3,7 +3,7 @@ let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || t
 let isSortListsEnabled = false;
 sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ; 
 
-let dataTotal  = JSON.parse(localStorage.getItem('dataTotal')) ;
+let dataTotal  = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 
@@ -19,16 +19,16 @@ let apiOffset = 0;
       const clonedResponse = response.clone(); // Clone the response to read it without consuming it
       const data = await clonedResponse.json();
   
-      localStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
+      sessionStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
       // Store the API data in localStorage
-      const existingData = JSON.parse(localStorage.getItem("conversations")) || [];
+      const existingData = JSON.parse(sessionStorage.getItem("conversations")) || [];
       const newConversations = data.items.map((item) => ({
         ...item,
         update_time: item.update_time ? new Date(item.update_time) : null,
       }));
 
       const mergedConversations = mergeAndCleanConversations(existingData, newConversations);
-      localStorage.setItem("conversations", JSON.stringify(mergedConversations));
+      sessionStorage.setItem("conversations", JSON.stringify(mergedConversations));
 
       // Save the offset to avoid re-fetching the same data
       apiOffset = data.offset + data.limit;
@@ -118,7 +118,7 @@ function triggerScrollAndEvent() {
     return;
   }
 
-  if (apiOffset < (JSON.parse(localStorage.getItem('dataTotal')))) {
+  if (apiOffset < (JSON.parse(sessionStorage.getItem('dataTotal')))) {
     // Check if the container can scroll further
     if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
       // If at the bottom, scroll back to the top
