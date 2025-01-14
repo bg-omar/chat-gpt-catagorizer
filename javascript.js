@@ -1,5 +1,9 @@
-let isScriptEnabled = localStorage.getItem('isScriptEnabled') || true; // Default state
-let dataTotal;
+let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
+let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
+let isSortListsEnabled = false;
+sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ; 
+
+let dataTotal  = JSON.parse(localStorage.getItem('dataTotal')) ;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 
@@ -14,7 +18,8 @@ let apiOffset = 0;
     if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
       const clonedResponse = response.clone(); // Clone the response to read it without consuming it
       const data = await clonedResponse.json();
-
+  
+      localStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
       // Store the API data in localStorage
       const existingData = JSON.parse(localStorage.getItem("conversations")) || [];
       const newConversations = data.items.map((item) => ({
@@ -27,12 +32,111 @@ let apiOffset = 0;
 
       // Save the offset to avoid re-fetching the same data
       apiOffset = data.offset + data.limit;
-      dataTotal = data.total;
+      
     }
 
     return response;
   };
 })();
+
+document.addEventListener('DOMContentLoaded', () => {
+   setStates();
+    repeater();
+    initializeMutationObserver();
+});
+
+function repeater() {
+  const firstSort = setInterval(async () => {
+    try {
+      await getStates();
+      if(isScrollEnabled) { 
+        await triggerScrollAndEvent(); 
+        
+      }
+      if(isScrollEnabled) {
+         await addTitleBanner();
+         await checkAndReplaceText();
+       }
+      if(isSortListsEnabled) {
+        await sortLists();
+        await validateListItems();
+      }
+      await setStates();
+    } catch (e) {
+      console.error('Error in sortLists interval:', e);
+    }
+  }, 5000);
+
+  setTimeout(() => {
+    clearInterval(firstSort);
+
+    setInterval(async () => {
+      try {
+      await getStates();
+      if(isScrollEnabled) { 
+        await triggerScrollAndEvent(); 
+      }
+      if(isScrollEnabled) {
+         await addTitleBanner();
+         await checkAndReplaceText();
+       }
+      if(isSortListsEnabled) {
+        await sortLists();
+        await validateListItems();
+      }
+      await setStates();
+      } catch (e) {
+        console.error(
+            'Error in checkAndReplaceText interval after timeout:',
+            e
+        );
+      }
+    }, 90000);
+  }, 30000);
+}
+
+function getStates() {
+     isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
+     isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')); 
+     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
+}
+
+function setStates() {
+    sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
+    sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
+    sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
+}
+
+function triggerScrollAndEvent() {
+  // Find the scrolling container
+  const scrollContainer = document.querySelector(
+      '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
+  );
+
+  if (!scrollContainer) {
+    console.error('Scrolling container not found.');
+    return;
+  }
+
+  if (apiOffset < (JSON.parse(localStorage.getItem('dataTotal')))) {
+    // Check if the container can scroll further
+    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
+      // If at the bottom, scroll back to the top
+      scrollContainer.scrollTop = 0;
+      // Dispatch the scroll event to trigger the website's fetching logic
+      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+      console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+    }
+    // Otherwise, scroll down by a fixed amount
+    scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
+    // Dispatch the scroll event to trigger the website's fetching logic
+    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+  } else {
+    isScrollEnabled = false;
+    isSortListsEnabled = true;
+  }
+}
 
 function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
   const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5');
@@ -83,78 +187,8 @@ function processOrphans(conversations, olElement) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (isScriptEnabled){
-    repeater();
-    initializeMutationObserver();
-    initializeButtonClickListeners();
-  }
-});
-
-function triggerScrollAndEvent() {
-  // Find the scrolling container
-  const scrollContainer = document.querySelector(
-      '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
-  );
-
-  if (!scrollContainer) {
-    console.error('Scrolling container not found.');
-    return;
-  }
-
-  if (apiOffset < (dataTotal)) {
-
-    // Check if the container can scroll further
-    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-      // If at the bottom, scroll back to the top
-      scrollContainer.scrollTop = 0;
-      // Dispatch the scroll event to trigger the website's fetching logic
-      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-      console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-    }
-    // Otherwise, scroll down by a fixed amount
-    scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
-    // Dispatch the scroll event to trigger the website's fetching logic
-    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-  }
-}
-
-function repeater() {
-  const firstSort = setInterval(async () => {
-    try {
-      await triggerScrollAndEvent(); // Simulate the scroll event
-      await addTitleBanner();
-      await checkAndReplaceText();
-      await sortLists();
-      await validateListItems();
-
-    } catch (e) {
-      console.error('Error in sortLists interval:', e);
-    }
-  }, 5000);
-
-  setTimeout(() => {
-    clearInterval(firstSort);
-
-    setInterval(async () => {
-      try {
-        await triggerScrollAndEvent(); // Simulate the scroll event
-        await addTitleBanner();
-        await checkAndReplaceText();
-        await sortLists();
-        await validateListItems();
-      } catch (e) {
-        console.error(
-            'Error in checkAndReplaceText interval after timeout:',
-            e
-        );
-      }
-    }, 90000);
-  }, 30000);
-}
-
 function checkAndReplaceText() {
+
   const divElements = document.querySelectorAll(
       '.relative.grow.overflow-hidden.whitespace-nowrap'
   );
@@ -220,23 +254,13 @@ function checkAndReplaceText() {
 }
 
 function collectSingleItems(categories, singleItems, fragment) {
+    if(!isSortListsEnabled) return;
   // Separate out single-item categories
   const sortedCategories = [];
   for (const category in categories) {
     if (categories[category].length === 1) {
       singleItems.push(...categories[category]);
     } else {
-      // Store categories along with the earliest date in their items
-      const earliestDate = categories[category]
-          .filter((item) => item.date instanceof Date && !isNaN(item.date))
-          .reduce(
-              (earliest, current) =>
-                  !earliest || current.date < earliest ? current.date : earliest,
-              null
-          );
-
-      console.log('Earliest Date for category:', category, earliestDate);
-
       const mostRecentDate = categories[category]
           .filter((item) => item.date instanceof Date && !isNaN(item.date))
           .reduce(
@@ -247,10 +271,11 @@ function collectSingleItems(categories, singleItems, fragment) {
               null
           );
 
+      console.log('Most Recent Date for category:', category, mostRecentDate);
       sortedCategories.push({
         category,
         items: categories[category].map((itemObj) => itemObj.item),
-        earliestDate: mostRecentDate, // Now reflects the most recent date
+        mostRecentDate: mostRecentDate, // Now reflects the most recent date
       });
     }
   }
@@ -267,8 +292,6 @@ function collectSingleItems(categories, singleItems, fragment) {
 }
 
 function sortLists() {
-  console.log("offset: ", apiOffset," total: ", dataTotal)
-  if (apiOffset >= (dataTotal)) {
     const categories = {};
     const uncategorizedItems = [];
     const singleItems = []; // To collect single item categories
@@ -329,7 +352,7 @@ function sortLists() {
         } else {
           uncategorizedItems.push({item, date});
         }
-        console.log("processedItems added: ", item);
+        // console.log("processedItems added: ", item);
         processedItems.add(item);
       });
     });
@@ -347,8 +370,8 @@ function sortLists() {
     if (conversations && conversations.length > 0) {
       processOrphans(conversations, olElement);
     }
-    console.log("orphan item: ", orphans);
-    console.log("uncategorizedItems: ", uncategorizedItems);
+    // console.log("orphan item: ", orphans);
+    // console.log("uncategorizedItems: ", uncategorizedItems);
     // Sort items within categories by date (ascending order)
     for (const category in categories) {
       categories[category].sort((a, b) => {
@@ -392,8 +415,8 @@ function sortLists() {
 
     // Sort categories by the earliest date among their items (ascending order)
     sortedCategories.sort((a, b) => {
-      const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
-      const dateB = b.earliestDate || new Date(0);
+      const dateA = a.mostRecentDate || new Date(0); // Fallback to earliest possible date if undefined
+      const dateB = b.mostRecentDate || new Date(0);
       return dateB - dateA; // For descending order, use `dateB - dateA`
     });
 
@@ -419,11 +442,9 @@ function sortLists() {
     });
 
     listContainer.appendChild(fragment);
-
     // Reinitialize button listeners and dropdowns after sorting
-    initializeButtonClickListeners();
     reinitializeDropdowns();
-  }
+  
 }
 
 function addTitleBanner() {
@@ -583,26 +604,8 @@ function initializeMutationObserver() {
   }
 }
 
-function initializeButtonClickListeners() {
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-  if (!listContainer) return;
 
-  listContainer.addEventListener('click', (event) => {
-    const button = event.target.closest('button');
-    if (button) {
-      handleButtonClick(button);
-    }
-  });
-}
 
-function handleButtonClick(button) {
-  const buttonId = button.id || "No ID";
-  console.log(`Button with ID ${buttonId} was clicked!`);
-
-  if (buttonId === "No ID") {
-    console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
-  }
-}
 
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
@@ -667,3 +670,4 @@ function validateListItems() {
     }
   });
 }
+
