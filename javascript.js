@@ -51,9 +51,8 @@ function repeater() {
       await getStates();
       if(isScrollEnabled) { 
         await triggerScrollAndEvent(); 
-        
       }
-      if(isScrollEnabled) {
+      if(isScriptEnabled) {
          await addTitleBanner();
          await checkAndReplaceText();
        }
