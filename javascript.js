@@ -39,13 +39,14 @@ let apiOffset = 0;
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
-   setStates();
+    setStates();
     repeater();
     initializeMutationObserver();
+    initializeButtonClickListeners();
 });
 
 function repeater() {
-    if (apiOffset < (JSON.parse(sessionStorage.getItem('dataTotal')))) {
+  
   const firstSort = setInterval(async () => {
     try {
       await getStates();
@@ -61,13 +62,13 @@ function repeater() {
         await validateListItems();
       }
       await setStates();
+
     } catch (e) {
       console.error('Error in sortLists interval:', e);
     }
   }, 5000);
-} else {
+  if (apiOffset > dataTotal) {
     clearInterval(firstSort);
-
     setInterval(async () => {
       try {
       await getStates();
@@ -97,13 +98,15 @@ function getStates() {
      isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
      isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')); 
      isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
-     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')) ; 
+     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')); 
+     dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 }
 
 function setStates() {
     sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
     sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
     sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
+    if (apiOffset > dataTotal) {clearInterval(firstSort);}
 }
 
 function triggerScrollAndEvent() {
@@ -443,6 +446,8 @@ function sortLists() {
     listContainer.appendChild(fragment);
     // Reinitialize button listeners and dropdowns after sorting
     reinitializeDropdowns();
+    initializeButtonClickListeners();
+   
   
 }
 
@@ -670,3 +675,24 @@ function validateListItems() {
   });
 }
 
+function initializeButtonClickListeners() {
+  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+  if (!listContainer) return;
+
+  listContainer.addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (button) {
+      handleButtonClick(button);
+    }
+  });
+}
+
+function handleButtonClick(button) {
+  const buttonId = button.id || "No ID";
+  console.log(`Button with ID ${buttonId} was clicked!`);
+  
+
+  if (buttonId === "No ID") {
+    console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
+  }
+}
