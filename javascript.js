@@ -44,55 +44,165 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMutationObserver();
     initializeButtonClickListeners();
 });
+let isPaused = false; // New variable for pause state
+let pauseTimeout = null; // To track the timeout for the pause
+
+// Attach the pause toggle and other buttons to the DOM
+document.addEventListener('DOMContentLoaded', () => {
+  // Create container for the buttons
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  `;
+
+  // Create the "Pause Repeater" button
+  const pauseButton = document.createElement('button');
+  pauseButton.textContent = 'Pause Repeater';
+  pauseButton.style.cssText = getButtonStyles();
+  pauseButton.addEventListener('click', togglePause);
+
+  // Create the "Toggle Script Enabled" button
+  const scriptButton = document.createElement('button');
+  scriptButton.textContent = 'Toggle Script Enabled';
+  scriptButton.style.cssText = getButtonStyles();
+  scriptButton.addEventListener('click', () => {
+    isScriptEnabled = !isScriptEnabled;
+    sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
+    console.log('Script Enabled:', isScriptEnabled);
+  });
+
+  // Create the "Toggle Scroll Enabled" button
+  const scrollButton = document.createElement('button');
+  scrollButton.textContent = 'Toggle Scroll Enabled';
+  scrollButton.style.cssText = getButtonStyles();
+  scrollButton.addEventListener('click', () => {
+    isScrollEnabled = !isScrollEnabled;
+    sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
+    console.log('Scroll Enabled:', isScrollEnabled);
+  });
+
+  // Create the "Toggle Sort Lists Enabled" button
+  const sortListsButton = document.createElement('button');
+  sortListsButton.textContent = 'Toggle Sort Lists Enabled';
+  sortListsButton.style.cssText = getButtonStyles();
+  sortListsButton.addEventListener('click', () => {
+    isSortListsEnabled = !isSortListsEnabled;
+    sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
+    console.log('Sort Lists Enabled:', isSortListsEnabled);
+  });
+
+  // Append buttons to the container
+  buttonContainer.appendChild(pauseButton);
+  buttonContainer.appendChild(scriptButton);
+  buttonContainer.appendChild(scrollButton);
+  buttonContainer.appendChild(sortListsButton);
+
+  // Add the container to the document body
+  document.body.appendChild(buttonContainer);
+});
+
+// Function to get button styles
+function getButtonStyles() {
+  return `
+    padding: 10px 20px;
+    background-color: #202;
+    color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+}
+
+// Function to toggle pause state
+function togglePause() {
+  if (isPaused) return; // Prevent repeated activations
+
+  isPaused = true;
+  console.log('Repeater paused');
+
+  // Set timeout to resume after 30 seconds
+  pauseTimeout = setTimeout(() => {
+    isPaused = false;
+    console.log('Repeater resumed');
+  }, 30000);
+}
+
+
+// Attach the pause toggle to a button
+document.addEventListener('DOMContentLoaded', () => {
+  const pauseButton = document.createElement('button');
+  pauseButton.textContent = 'Pause Repeater';
+  pauseButton.style.cssText = `
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    padding: 10px 20px;
+    background-color: #202;
+    color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+  `;
+  pauseButton.addEventListener('click', togglePause);
+  document.body.appendChild(pauseButton);
+});
 
 function repeater() {
-  
   const firstSort = setInterval(async () => {
+    if (isPaused) return; // Skip execution if paused
     try {
       await getStates();
-      if(isScrollEnabled) { 
-        await triggerScrollAndEvent(); 
+      if (isScrollEnabled) {
+        await triggerScrollAndEvent();
       }
-      if(isScriptEnabled) {
-         await addTitleBanner();
-         await checkAndReplaceText();
-       }
-      if(isSortListsEnabled) {
+      if (isScriptEnabled) {
+        await addTitleBanner();
+        await checkAndReplaceText();
+      }
+      if (isSortListsEnabled) {
         await sortLists();
         await validateListItems();
       }
       await setStates();
-
     } catch (e) {
       console.error('Error in sortLists interval:', e);
     }
   }, 5000);
+
   if (apiOffset > dataTotal) {
     clearInterval(firstSort);
     setInterval(async () => {
+      if (isPaused) return; // Skip execution if paused
       try {
-      await getStates();
-      if(isScrollEnabled) { 
-        await triggerScrollAndEvent(); 
-      }
-      if(isScrollEnabled) {
-         await addTitleBanner();
-         await checkAndReplaceText();
-       }
-      if(isSortListsEnabled) {
-        await sortLists();
-        await validateListItems();
-      }
-      await setStates();
+        await getStates();
+        if (isScrollEnabled) {
+          await triggerScrollAndEvent();
+        }
+        if (isScrollEnabled) {
+          await addTitleBanner();
+          await checkAndReplaceText();
+        }
+        if (isSortListsEnabled) {
+          await sortLists();
+          await validateListItems();
+        }
+        await setStates();
       } catch (e) {
         console.error(
-            'Error in checkAndReplaceText interval after timeout:',
-            e
+          'Error in checkAndReplaceText interval after timeout:',
+          e
         );
       }
     }, 90000);
   }
 }
+
 
 function getStates() {
      isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
@@ -106,7 +216,6 @@ function setStates() {
     sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
     sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
     sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-    if (apiOffset > dataTotal) {clearInterval(firstSort);}
 }
 
 function triggerScrollAndEvent() {
