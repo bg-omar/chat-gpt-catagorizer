@@ -44,10 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeMutationObserver();
     initializeButtonClickListeners();
 });
-let isPaused = false; // New variable for pause state
-let pauseTimeout = null; // To track the timeout for the pause
 
-// Attach the pause toggle and other buttons to the DOM
+
+let isPaused = false;
+let pauseTimeout = null;
+let pauseTimeLeft = 30; // Countdown in seconds
+  const pauseButton = document.createElement('button');
+  
 document.addEventListener('DOMContentLoaded', () => {
   // Create container for the buttons
   const buttonContainer = document.createElement('div');
@@ -61,40 +64,28 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
 
   // Create the "Pause Repeater" button
-  const pauseButton = document.createElement('button');
-  pauseButton.textContent = 'Pause Repeater';
+
   pauseButton.style.cssText = getButtonStyles();
-  pauseButton.addEventListener('click', togglePause);
+  pauseButton.textContent = `Pause Repeater (30s)`;
+  pauseButton.addEventListener('click', () => togglePause(pauseButton));
 
   // Create the "Toggle Script Enabled" button
   const scriptButton = document.createElement('button');
-  scriptButton.textContent = 'Toggle Script Enabled';
   scriptButton.style.cssText = getButtonStyles();
-  scriptButton.addEventListener('click', () => {
-    isScriptEnabled = !isScriptEnabled;
-    sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
-    console.log('Script Enabled:', isScriptEnabled);
-  });
+  scriptButton.textContent = `Script Enabled: ${isScriptEnabled}`;
+  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
 
   // Create the "Toggle Scroll Enabled" button
   const scrollButton = document.createElement('button');
-  scrollButton.textContent = 'Toggle Scroll Enabled';
   scrollButton.style.cssText = getButtonStyles();
-  scrollButton.addEventListener('click', () => {
-    isScrollEnabled = !isScrollEnabled;
-    sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
-    console.log('Scroll Enabled:', isScrollEnabled);
-  });
+  scrollButton.textContent = `Scroll Enabled: ${isScrollEnabled}`;
+  scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
 
   // Create the "Toggle Sort Lists Enabled" button
   const sortListsButton = document.createElement('button');
-  sortListsButton.textContent = 'Toggle Sort Lists Enabled';
   sortListsButton.style.cssText = getButtonStyles();
-  sortListsButton.addEventListener('click', () => {
-    isSortListsEnabled = !isSortListsEnabled;
-    sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-    console.log('Sort Lists Enabled:', isSortListsEnabled);
-  });
+  sortListsButton.textContent = `Sort Lists Enabled: ${isSortListsEnabled}`;
+  sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
 
   // Append buttons to the container
   buttonContainer.appendChild(pauseButton);
@@ -105,6 +96,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add the container to the document body
   document.body.appendChild(buttonContainer);
 });
+
+// Function to toggle pause state
+function togglePause(pauseButton = pauseButton) {
+  if (isPaused) return; // Prevent repeated activations
+
+  isPaused = true;
+  pauseTimeLeft = 30; // Reset countdown
+  pauseButton.disabled = true; // Disable the button while paused
+
+  const countdownInterval = setInterval(() => {
+    pauseTimeLeft--;
+    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
+
+    if (pauseTimeLeft <= 0) {
+      clearInterval(countdownInterval); // Clear the interval when countdown ends
+      isPaused = false;
+      pauseButton.disabled = false; // Re-enable the button
+      pauseButton.textContent = `Pause Repeater (30s)`;
+      console.log('Repeater resumed');
+    }
+  }, 1000); // Update every second
+}
+
+// Function to toggle state and update the button text
+function toggleState(stateKey, button) {
+  const currentState = JSON.parse(sessionStorage.getItem(stateKey));
+  const newState = !currentState;
+
+  sessionStorage.setItem(stateKey, JSON.stringify(newState));
+  button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
+  console.log(`${stateKey}:`, newState);
+}
 
 // Function to get button styles
 function getButtonStyles() {
@@ -119,39 +142,8 @@ function getButtonStyles() {
   `;
 }
 
-// Function to toggle pause state
-function togglePause() {
-  if (isPaused) return; // Prevent repeated activations
-
-  isPaused = true;
-  console.log('Repeater paused');
-
-  // Set timeout to resume after 30 seconds
-  pauseTimeout = setTimeout(() => {
-    isPaused = false;
-    console.log('Repeater resumed');
-  }, 30000);
-}
 
 
-// Attach the pause toggle to a button
-document.addEventListener('DOMContentLoaded', () => {
-  const pauseButton = document.createElement('button');
-  pauseButton.textContent = 'Pause Repeater';
-  pauseButton.style.cssText = `
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    padding: 10px 20px;
-    background-color: #202;
-    color: #fff;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    cursor: pointer;
-  `;
-  pauseButton.addEventListener('click', togglePause);
-  document.body.appendChild(pauseButton);
-});
 
 function repeater() {
   const firstSort = setInterval(async () => {
@@ -792,6 +784,7 @@ function initializeButtonClickListeners() {
     const button = event.target.closest('button');
     if (button) {
       handleButtonClick(button);
+      togglePause();
     }
   });
 }
