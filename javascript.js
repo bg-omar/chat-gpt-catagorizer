@@ -6,7 +6,18 @@ sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ;
 let dataTotal  = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
-
+let isPaused = false;
+let pauseTimeout = null;
+let pauseTimeLeft = 30; // Countdown in seconds
+// Create the "Pause Repeater" button
+const pauseButton = document.createElement('button');
+// Create the "Toggle Script Enabled" button
+const scriptButton = document.createElement('button');
+// Create the "Toggle Scroll Enabled" button
+const scrollButton = document.createElement('button');
+// Create the "Toggle Sort Lists Enabled" button
+const sortListsButton = document.createElement('button');
+  
 (function () {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
@@ -38,112 +49,15 @@ let apiOffset = 0;
   };
 })();
 
+
 document.addEventListener('DOMContentLoaded', () => {
+    initializeButtons();
     setStates();
     repeater();
-    initializeMutationObserver();
+    //monitorProjectChanges();
+    //initializeMutationObserver();
     initializeButtonClickListeners();
 });
-
-
-let isPaused = false;
-let pauseTimeout = null;
-let pauseTimeLeft = 30; // Countdown in seconds
-  const pauseButton = document.createElement('button');
-  
-document.addEventListener('DOMContentLoaded', () => {
-  // Create container for the buttons
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.cssText = `
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  `;
-
-  // Create the "Pause Repeater" button
-
-  pauseButton.style.cssText = getButtonStyles();
-  pauseButton.textContent = `Pause Repeater (30s)`;
-  pauseButton.addEventListener('click', () => togglePause(pauseButton));
-
-  // Create the "Toggle Script Enabled" button
-  const scriptButton = document.createElement('button');
-  scriptButton.style.cssText = getButtonStyles();
-  scriptButton.textContent = `Script Enabled: ${isScriptEnabled}`;
-  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
-
-  // Create the "Toggle Scroll Enabled" button
-  const scrollButton = document.createElement('button');
-  scrollButton.style.cssText = getButtonStyles();
-  scrollButton.textContent = `Scroll Enabled: ${isScrollEnabled}`;
-  scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
-
-  // Create the "Toggle Sort Lists Enabled" button
-  const sortListsButton = document.createElement('button');
-  sortListsButton.style.cssText = getButtonStyles();
-  sortListsButton.textContent = `Sort Lists Enabled: ${isSortListsEnabled}`;
-  sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
-
-  // Append buttons to the container
-  buttonContainer.appendChild(pauseButton);
-  buttonContainer.appendChild(scriptButton);
-  buttonContainer.appendChild(scrollButton);
-  buttonContainer.appendChild(sortListsButton);
-
-  // Add the container to the document body
-  document.body.appendChild(buttonContainer);
-});
-
-// Function to toggle pause state
-function togglePause(pauseButton = pauseButton) {
-  if (isPaused) return; // Prevent repeated activations
-
-  isPaused = true;
-  pauseTimeLeft = 30; // Reset countdown
-  pauseButton.disabled = true; // Disable the button while paused
-
-  const countdownInterval = setInterval(() => {
-    pauseTimeLeft--;
-    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
-
-    if (pauseTimeLeft <= 0) {
-      clearInterval(countdownInterval); // Clear the interval when countdown ends
-      isPaused = false;
-      pauseButton.disabled = false; // Re-enable the button
-      pauseButton.textContent = `Pause Repeater (30s)`;
-      console.log('Repeater resumed');
-    }
-  }, 1000); // Update every second
-}
-
-// Function to toggle state and update the button text
-function toggleState(stateKey, button) {
-  const currentState = JSON.parse(sessionStorage.getItem(stateKey));
-  const newState = !currentState;
-
-  sessionStorage.setItem(stateKey, JSON.stringify(newState));
-  button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
-  console.log(`${stateKey}:`, newState);
-}
-
-// Function to get button styles
-function getButtonStyles() {
-  return `
-    padding: 10px 20px;
-    background-color: #202;
-    color: #fff;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
-  `;
-}
-
-
-
 
 function repeater() {
   const firstSort = setInterval(async () => {
@@ -154,7 +68,6 @@ function repeater() {
         await triggerScrollAndEvent();
       }
       if (isScriptEnabled) {
-        await addTitleBanner();
         await checkAndReplaceText();
       }
       if (isSortListsEnabled) {
@@ -177,7 +90,6 @@ function repeater() {
           await triggerScrollAndEvent();
         }
         if (isScrollEnabled) {
-          await addTitleBanner();
           await checkAndReplaceText();
         }
         if (isSortListsEnabled) {
@@ -195,6 +107,102 @@ function repeater() {
   }
 }
 
+function initializeButtons() {
+  // Create container for the buttonsD
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  `;
+
+  pauseButton.style.cssText = getButtonStyles();
+  pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+  pauseButton.addEventListener('click', () => togglePause(pauseButton));
+
+  scriptButton.style.cssText = getButtonStyles();
+  scriptButton.textContent = `Script Enabled: ${isScriptEnabled}`;
+  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
+
+  scrollButton.style.cssText = getButtonStyles();
+  scrollButton.textContent = `Scroll Enabled: ${isScrollEnabled}`;
+  scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
+
+
+  sortListsButton.style.cssText = getButtonStyles();
+  sortListsButton.textContent = `Sort Lists Enabled: ${isSortListsEnabled}`;
+  sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
+
+  // Append buttons to the container
+  buttonContainer.appendChild(pauseButton);
+  buttonContainer.appendChild(scriptButton);
+  buttonContainer.appendChild(scrollButton);
+  buttonContainer.appendChild(sortListsButton);
+
+  // Add the container to the document body
+  document.body.appendChild(buttonContainer);
+}
+
+// Function to toggle pause state
+function togglePause(pauseButton) {
+ if (isPaused) {
+    // If already paused, unpause
+    clearInterval(pauseTimeout); // Stop the countdown
+    isPaused = false;
+    pauseTimeLeft = 30; // Reset countdown
+    pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+    console.log('Repeater unpaused');
+  } else {
+    // If not paused, start pause
+  isPaused = true;
+    pauseButton.disabled = false; // Keep button enabled to allow unpausing
+    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
+
+    pauseTimeout = setInterval(() => {
+    pauseTimeLeft--;
+    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
+
+    if (pauseTimeLeft <= 0) {
+      clearInterval(pauseTimeout);
+      isPaused = false;
+      pauseTimeLeft = 30;
+      pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+      console.log('Repeater resumed');
+    }
+    }, 1000);
+  }
+}
+
+// Function to toggle state and update the button text
+function toggleState(stateKey, button) {
+  const currentState = JSON.parse(sessionStorage.getItem(stateKey));
+  const newState = !currentState;
+
+  sessionStorage.setItem(stateKey, JSON.stringify(newState));
+  button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
+  console.log(`${stateKey}:`, newState);
+}
+
+// Function to get button styles
+function getButtonStyles() {
+  return `
+    padding: 10px 20px;
+    background-color: #22002244;
+    color: #ffffff44;
+    border: 1px solid #cccccc44;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 10px;
+    :hover {
+        color: #fff;
+        background-color: #202;
+        border: 1px solid #ccc;
+    }
+  `;
+}
 
 function getStates() {
      isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
@@ -202,12 +210,19 @@ function getStates() {
      isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
      apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')); 
      dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
+     if (apiOffset >= dataTotal){
+       if(isScrollEnabled) {
+         isSortListsEnabled = true;
+       }
+       isScrollEnabled = false;
+     }
 }
 
 function setStates() {
     sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
     sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
     sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
+  
 }
 
 function triggerScrollAndEvent() {
@@ -220,24 +235,24 @@ function triggerScrollAndEvent() {
     console.error('Scrolling container not found.');
     return;
   }
-
-  if (apiOffset < (JSON.parse(sessionStorage.getItem('dataTotal')))) {
-    // Check if the container can scroll further
-    if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-      // If at the bottom, scroll back to the top
-      scrollContainer.scrollTop = 0;
-      // Dispatch the scroll event to trigger the website's fetching logic
-      scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-      console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-    }
-    // Otherwise, scroll down by a fixed amount
-    scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
+  // Check if the container can scroll further
+  if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
+    // If at the bottom, scroll back to the top
+    scrollContainer.scrollTop = 0;
     // Dispatch the scroll event to trigger the website's fetching logic
     scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
     console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-  } else {
+  }
+  // Otherwise, scroll down by a fixed amount
+  scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
+  // Dispatch the scroll event to trigger the website's fetching logic
+  scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+  console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+
+  if (apiOffset >= dataTotal) {
     isScrollEnabled = false;
     isSortListsEnabled = true;
+    setStates();
   }
 }
 
@@ -322,7 +337,7 @@ function checkAndReplaceText() {
     let textContent = divElement.textContent;
     conversations.forEach((item) => {
       if (item.title === textContent) {
-        console.log("update_time: ", item.update_time.trim(), "id: ", item.id.trim());
+        //console.log("update_time: ", item.update_time.trim(), "id: ", item.id.trim());
         divElement.closest('li')?.setAttribute('data-date', item.update_time.trim());
         divElement.closest('li')?.setAttribute('data-id', item.id.trim());
       }
@@ -374,7 +389,7 @@ function collectSingleItems(categories, singleItems, fragment) {
               null
           );
 
-      console.log('Most Recent Date for category:', category, mostRecentDate);
+      //console.log('Most Recent Date for category:', category, mostRecentDate);
       sortedCategories.push({
         category,
         items: categories[category].map((itemObj) => itemObj.item),
@@ -523,7 +538,7 @@ function sortLists() {
       return dateB - dateA; // For descending order, use `dateB - dateA`
     });
 
-    console.log('Sorted categories by earliest date:', sortedCategories);
+    //console.log('Sorted categories by earliest date:', sortedCategories);
 
     // Clear and sort the fragment
 
@@ -550,68 +565,6 @@ function sortLists() {
     initializeButtonClickListeners();
    
   
-}
-
-function addTitleBanner() {
-  // Extract the item ID from the URL
-  const currentItemId = new URL(window.location.href).pathname.split("/c/")[1];
-  if (!currentItemId) return;
-
-  // Fetch stored conversations
-  const conversations = managesessionStorage("get") || [];
-  const currentConversation = conversations.find(
-      (item) => item.id === currentItemId
-  );
-
-  // If no matching conversation is found, skip
-  if (!currentConversation) return;
-
-  // Check if the banner already exists
-  let banner = document.getElementById("title-banner");
-
-  // Retrieve colors from sessionStorage
-  let wordColors = {};
-  try {
-    wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
-  } catch (e) {
-    console.error("Error parsing wordColors from sessionStorage:", e);
-    wordColors = {};
-  }
-
-  // Apply coloring logic to the title
-  const regex = /\b(\w+)\b/g; // Match words
-  let coloredTitle = currentConversation.title.replace(regex, (match) => {
-    if (wordColors[match]) {
-      return `<span style="color: ${wordColors[match]}; border: 1px dotted ${wordColors[match]}">${match}</span>`;
-    }
-    return match; // Leave words without a matching color unstyled
-  });
-
-  // If banner exists, update its content; otherwise, create a new one
-  if (banner) {
-    banner.innerHTML = coloredTitle;
-  } else {
-    banner = document.createElement("div");
-    banner.id = "title-banner";
-    banner.style.cssText = `
-      position: fixed;
-      font-size: 18px;
-      font-weight: bold;
-      text-align: center;
-      width: 100%;
-      padding: 0 20px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      border: 1px dotted;
-      background-color: #202;
-      white-space: nowrap;
-    `;
-    banner.innerHTML = coloredTitle;
-
-    // Add the banner to the document
-    document.body.prepend(banner);
-  }
 }
 
 function createCategoryContainer(category, items, color) {
@@ -686,14 +639,14 @@ function initializeMutationObserver() {
       ) {
         isObserving = false;
         try {
-          // Check and replace text and sort after DOM changes
-          //reinitializeHoverStates();
+
+          reinitializeHoverStates();
           checkAndReplaceText();
           sortLists();
-          //validateListItems();
+          validateListItems();
 
           // Handle chat renames
-          //renameChatHandler(mutation);
+          renameChatHandler(mutation);
         } catch (e) {
           console.error('Error in mutation callback:', e);
         } finally {
@@ -709,8 +662,80 @@ function initializeMutationObserver() {
   }
 }
 
+function monitorProjectChanges() {
+    const projectsContainer = document.querySelector('.projects-container-selector'); // Update the selector to match your Projects container
+
+    if (!projectsContainer) {
+        console.error('Projects container not found.');
+        return;
+    }
+
+    // Create a MutationObserver
+    const observer = new MutationObserver((mutationsList) => {
+        mutationsList.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // Handle added items
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        console.log('New item added to Projects:', node);
+                        notifyScriptOfChange(node);
+                    }
+                });
+            }
+
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-project-id') {
+                console.log('Project attributes changed:', mutation.target);
+                notifyScriptOfChange(mutation.target);
+            }
+        });
+    });
+
+    // Configure the observer to watch for child additions and attribute changes
+    observer.observe(projectsContainer, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+    });
+
+    console.log('Monitoring project changes...');
+}
+
+// Function to notify the script of a change
+function notifyScriptOfChange(changedElement) {
+    console.log('Change detected:', changedElement);
+
+    // Perform any necessary actions (e.g., update sessionStorage or UI)
+    const projectId = changedElement.getAttribute('data-project-id');
+    const projectTitle = changedElement.textContent.trim();
+    console.log(`Project updated: ${projectId} - ${projectTitle}`);
+}
 
 
+
+function renameChatHandler(mutation) {
+  const updatedTitleElement = mutation.target.closest(
+    '.relative.grow.overflow-hidden.whitespace-nowrap'
+  );
+  if (!updatedTitleElement) return;
+
+  const updatedTitle = updatedTitleElement.textContent.trim();
+  const chatId = updatedTitleElement.closest('li')?.getAttribute('data-id');
+
+  if (!chatId || !updatedTitle) return;
+
+  // Update the conversation title in sessionStorage
+  const conversations = managesessionStorage('get') || [];
+  const chat = conversations.find((item) => item.id === chatId);
+
+  if (chat) {
+    chat.title = updatedTitle;
+    managesessionStorage('set', conversations);
+
+    console.log(`Chat title updated for ID: ${chatId} -> ${updatedTitle}`);
+  } else {
+    console.warn(`Chat ID not found in sessionStorage: ${chatId}`);
+  }
+}
 
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
@@ -777,14 +802,13 @@ function validateListItems() {
 }
 
 function initializeButtonClickListeners() {
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+   const listContainer = document.querySelector('.group\\/sidebar');
   if (!listContainer) return;
 
   listContainer.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (button) {
       handleButtonClick(button);
-      togglePause();
     }
   });
 }
@@ -792,7 +816,14 @@ function initializeButtonClickListeners() {
 function handleButtonClick(button) {
   const buttonId = button.id || "No ID";
   console.log(`Button with ID ${buttonId} was clicked!`);
-  
+
+  // Reset the countdown
+  if (isPaused) {
+    pauseTimeLeft = 30; // Reset the countdown to 30 seconds
+    console.log('Countdown reset to 30 seconds');
+  } else {
+    togglePause(pauseButton);
+  }
 
   if (buttonId === "No ID") {
     console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
