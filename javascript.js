@@ -9,13 +9,11 @@ let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
-// Create the "Pause Repeater" button
+
+const offsetAmount = document.createElement('div');
 const pauseButton = document.createElement('button');
-// Create the "Toggle Script Enabled" button
 const scriptButton = document.createElement('button');
-// Create the "Toggle Scroll Enabled" button
 const scrollButton = document.createElement('button');
-// Create the "Toggle Sort Lists Enabled" button
 const sortListsButton = document.createElement('button');
   
 (function () {
@@ -54,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeButtons();
     setStates();
     repeater();
-    //monitorProjectChanges();
+    monitorProjectChanges();
     //initializeMutationObserver();
     initializeButtonClickListeners();
 });
@@ -114,11 +112,13 @@ function initializeButtons() {
     position: fixed;
     bottom: 80px;
     right: 10px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     gap: 10px;
   `;
 
+  offsetAmount.style.cssText = getButtonStyles();
+  offsetAmount.textContent = `Loaded: ${apiOffset} of ${dataTotal}`;
+  
   pauseButton.style.cssText = getButtonStyles();
   pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
   pauseButton.addEventListener('click', () => togglePause(pauseButton));
@@ -137,6 +137,7 @@ function initializeButtons() {
   sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
 
   // Append buttons to the container
+  buttonContainer.appendChild(offsetAmount);
   buttonContainer.appendChild(pauseButton);
   buttonContainer.appendChild(scriptButton);
   buttonContainer.appendChild(scrollButton);
@@ -189,10 +190,12 @@ function toggleState(stateKey, button) {
 // Function to get button styles
 function getButtonStyles() {
   return `
-    padding: 10px 20px;
+    padding: 10px 10px;
     background-color: #22002244;
-    color: #ffffff44;
-    border: 1px solid #cccccc44;
+    color: #ffffff66;
+    border: 1px solid #cccccc66;
+    justify-self: stretch;
+    text-align: center;
     border-radius: 5px;
     cursor: pointer;
     font-size: 10px;
@@ -210,6 +213,9 @@ function getStates() {
      isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
      apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')); 
      dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
+
+     offsetAmount.textContent = `Loaded: ${apiOffset} of ${dataTotal}`;
+
      if (apiOffset >= dataTotal){
        if(isScrollEnabled) {
          isSortListsEnabled = true;
@@ -563,8 +569,6 @@ function sortLists() {
     // Reinitialize button listeners and dropdowns after sorting
     reinitializeDropdowns();
     initializeButtonClickListeners();
-   
-  
 }
 
 function createCategoryContainer(category, items, color) {
