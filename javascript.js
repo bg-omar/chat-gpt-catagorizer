@@ -110,30 +110,30 @@ function initializeButtons() {
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = `
     position: fixed;
-    bottom: 80px;
+    bottom: 50%;
     right: 10px;
     display: grid;
     gap: 10px;
   `;
 
   offsetAmount.style.cssText = getButtonStyles();
-  offsetAmount.textContent = `Loaded: ${apiOffset} of ${dataTotal}`;
+  offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
   
   pauseButton.style.cssText = getButtonStyles();
-  pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+  pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
   pauseButton.addEventListener('click', () => togglePause(pauseButton));
 
   scriptButton.style.cssText = getButtonStyles();
-  scriptButton.textContent = `Script Enabled: ${isScriptEnabled}`;
+  scriptButton.textContent = `Script: ${isScriptEnabled}`;
   scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
 
   scrollButton.style.cssText = getButtonStyles();
-  scrollButton.textContent = `Scroll Enabled: ${isScrollEnabled}`;
+  scrollButton.textContent = `Scroll: ${isScrollEnabled}`;
   scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
 
 
   sortListsButton.style.cssText = getButtonStyles();
-  sortListsButton.textContent = `Sort Lists Enabled: ${isSortListsEnabled}`;
+  sortListsButton.textContent = `Lists: ${isSortListsEnabled}`;
   sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
 
   // Append buttons to the container
@@ -154,23 +154,23 @@ function togglePause(pauseButton) {
     clearInterval(pauseTimeout); // Stop the countdown
     isPaused = false;
     pauseTimeLeft = 30; // Reset countdown
-    pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+    pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
     console.log('Repeater unpaused');
   } else {
     // If not paused, start pause
   isPaused = true;
     pauseButton.disabled = false; // Keep button enabled to allow unpausing
-    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
+    pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
 
     pauseTimeout = setInterval(() => {
     pauseTimeLeft--;
-    pauseButton.textContent = `Repeater Paused (${pauseTimeLeft}s)`;
+    pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
 
     if (pauseTimeLeft <= 0) {
       clearInterval(pauseTimeout);
       isPaused = false;
       pauseTimeLeft = 30;
-      pauseButton.textContent = `Pause Repeater (${pauseTimeLeft}s)`;
+      pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
       console.log('Repeater resumed');
     }
     }, 1000);
@@ -214,7 +214,7 @@ function getStates() {
      apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')); 
      dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 
-     offsetAmount.textContent = `Loaded: ${apiOffset} of ${dataTotal}`;
+     offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
 
      if (apiOffset >= dataTotal){
        if(isScrollEnabled) {
@@ -344,8 +344,8 @@ function checkAndReplaceText() {
     conversations.forEach((item) => {
       if (item.title === textContent) {
         //console.log("update_time: ", item.update_time.trim(), "id: ", item.id.trim());
-        divElement.closest('li')?.setAttribute('data-date', item.update_time.trim());
-        divElement.closest('li')?.setAttribute('data-id', item.id.trim());
+        divElement.closest('li')?.setAttribute('data-date', item.update_time);
+        divElement.closest('li')?.setAttribute('data-id', item.id);
       }
     });
 
@@ -569,6 +569,8 @@ function sortLists() {
     // Reinitialize button listeners and dropdowns after sorting
     reinitializeDropdowns();
     initializeButtonClickListeners();
+   
+  
 }
 
 function createCategoryContainer(category, items, color) {
