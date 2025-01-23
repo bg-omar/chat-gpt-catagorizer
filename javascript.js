@@ -1,7 +1,7 @@
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
 let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
-sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ; 
+sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ;
 
 let dataTotal  = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
 let shouldFetchMore = true; // Initially, allow fetching
@@ -15,7 +15,7 @@ const pauseButton = document.createElement('button');
 const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
-  
+
 (function () {
   const originalFetch = window.fetch;
   window.fetch = async function (...args) {
@@ -27,7 +27,7 @@ const sortListsButton = document.createElement('button');
     if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
       const clonedResponse = response.clone(); // Clone the response to read it without consuming it
       const data = await clonedResponse.json();
-  
+
       sessionStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
       // Store the API data in localStorage
       const existingData = JSON.parse(sessionStorage.getItem("conversations")) || [];
@@ -49,12 +49,12 @@ const sortListsButton = document.createElement('button');
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    initializeButtons();
-    setStates();
-    repeater();
-    monitorProjectChanges();
-    //initializeMutationObserver();
-    initializeButtonClickListeners();
+  initializeButtons();
+  setStates();
+  repeater();
+  monitorProjectChanges();
+  //initializeMutationObserver();
+  initializeButtonClickListeners();
 });
 
 function repeater() {
@@ -97,8 +97,8 @@ function repeater() {
         await setStates();
       } catch (e) {
         console.error(
-          'Error in checkAndReplaceText interval after timeout:',
-          e
+            'Error in checkAndReplaceText interval after timeout:',
+            e
         );
       }
     }, 90000);
@@ -118,7 +118,7 @@ function initializeButtons() {
 
   offsetAmount.style.cssText = getButtonStyles();
   offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
-  
+
   pauseButton.style.cssText = getButtonStyles();
   pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
   pauseButton.addEventListener('click', () => togglePause(pauseButton));
@@ -149,7 +149,7 @@ function initializeButtons() {
 
 // Function to toggle pause state
 function togglePause(pauseButton) {
- if (isPaused) {
+  if (isPaused) {
     // If already paused, unpause
     clearInterval(pauseTimeout); // Stop the countdown
     isPaused = false;
@@ -158,21 +158,21 @@ function togglePause(pauseButton) {
     console.log('Repeater unpaused');
   } else {
     // If not paused, start pause
-  isPaused = true;
+    isPaused = true;
     pauseButton.disabled = false; // Keep button enabled to allow unpausing
     pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
 
     pauseTimeout = setInterval(() => {
-    pauseTimeLeft--;
-    pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
+      pauseTimeLeft--;
+      pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
 
-    if (pauseTimeLeft <= 0) {
-      clearInterval(pauseTimeout);
-      isPaused = false;
-      pauseTimeLeft = 30;
-      pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
-      console.log('Repeater resumed');
-    }
+      if (pauseTimeLeft <= 0) {
+        clearInterval(pauseTimeout);
+        isPaused = false;
+        pauseTimeLeft = 30;
+        pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
+        console.log('Repeater resumed');
+      }
     }, 1000);
   }
 }
@@ -208,27 +208,27 @@ function getButtonStyles() {
 }
 
 function getStates() {
-     isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')); 
-     isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')); 
-     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ; 
-     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset')); 
-     dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
+  isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
+  isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
+  isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ;
+  apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
+  dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 
-     offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
+  offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
 
-     if (apiOffset >= dataTotal){
-       if(isScrollEnabled) {
-         isSortListsEnabled = true;
-       }
-       isScrollEnabled = false;
-     }
+  if (apiOffset >= dataTotal){
+    if(isScrollEnabled) {
+      isSortListsEnabled = true;
+    }
+    isScrollEnabled = false;
+  }
 }
 
 function setStates() {
-    sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
-    sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
-    sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-  
+  sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
+  sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
+  sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
+
 }
 
 function triggerScrollAndEvent() {
@@ -378,7 +378,7 @@ function checkAndReplaceText() {
 }
 
 function collectSingleItems(categories, singleItems, fragment) {
-    if(!isSortListsEnabled) return;
+  if(!isSortListsEnabled) return;
   // Separate out single-item categories
   const sortedCategories = [];
   for (const category in categories) {
@@ -416,161 +416,161 @@ function collectSingleItems(categories, singleItems, fragment) {
 }
 
 function sortLists() {
-    const categories = {};
-    const uncategorizedItems = [];
-    const singleItems = []; // To collect single item categories
-    const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-    if (!listContainer) return;
+  const categories = {};
+  const uncategorizedItems = [];
+  const singleItems = []; // To collect single item categories
+  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+  if (!listContainer) return;
 
-    const originalOlLists = listContainer.querySelectorAll('ol');
-    const olListsToCategorize = Array.from(originalOlLists);
+  const originalOlLists = listContainer.querySelectorAll('ol');
+  const olListsToCategorize = Array.from(originalOlLists);
 
-    // Clear processedItems set to reflect the latest DOM structure
-    let processedItems = new Set();
-    let wordColors = {};
-    let conversations;
+  // Clear processedItems set to reflect the latest DOM structure
+  let processedItems = new Set();
+  let wordColors = {};
+  let conversations;
 
-    try {
-      wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
-      getConversations = managesessionStorage('get') || {};
-      conversations = Array.from(getConversations);
-    } catch (e) {
-      console.error('Error parsing wordColors from sessionStorage:', e);
-    }
+  try {
+    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+    getConversations = managesessionStorage('get') || {};
+    conversations = Array.from(getConversations);
+  } catch (e) {
+    console.error('Error parsing wordColors from sessionStorage:', e);
+  }
 
-    let totalitems = 0;
-    // console.log("olListsToCategorize: ", olListsToCategorize);
-    olListsToCategorize.forEach((ol) => {
-      ol.setAttribute('style', 'display: block;');
-      // console.log("ol: ", ol);
-      const listItems = ol.querySelectorAll('li');
-      listItems.forEach((item) => {
-        totalitems++;
-        if (processedItems.has(item)) return;
-        // console.log("%c 5 --> Line: 312||javascript.js\n item: ", "color:#0ff;", item);
-        const category = item.getAttribute('data-category');
-        let dateStr = item.getAttribute('data-date');
-        const dataId = item.getAttribute('data-id');
-        // console.log("%c 5 --> Line: 316||javascript.js\n item: ", "color:#0ff;", item);
-        let date2;
-        getConversations.forEach((item) => {
-          if (dataId === item.id) {
-            date2 = new Date(item.update_time);
-          }
-        });
-        if (dateStr !== undefined) {
-          conversations = removeObjectWithId(conversations, dataId);
-          // console.log("conversation removed: ", conversations.length, dataId);
+  let totalitems = 0;
+  // console.log("olListsToCategorize: ", olListsToCategorize);
+  olListsToCategorize.forEach((ol) => {
+    ol.setAttribute('style', 'display: block;');
+    // console.log("ol: ", ol);
+    const listItems = ol.querySelectorAll('li');
+    listItems.forEach((item) => {
+      totalitems++;
+      if (processedItems.has(item)) return;
+      // console.log("%c 5 --> Line: 312||javascript.js\n item: ", "color:#0ff;", item);
+      const category = item.getAttribute('data-category');
+      let dateStr = item.getAttribute('data-date');
+      const dataId = item.getAttribute('data-id');
+      // console.log("%c 5 --> Line: 316||javascript.js\n item: ", "color:#0ff;", item);
+      let date2;
+      getConversations.forEach((item) => {
+        if (dataId === item.id) {
+          date2 = new Date(item.update_time);
         }
-        // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
-        const fallbackDate = (date2 !== undefined) ? date2 : new Date(0); // Epoch time for missing dates
-        const date = (date2 !== undefined)
-            ? date2
-            : dateStr
-                ? new Date(dateStr)
-                : fallbackDate;
-        // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
-        if (category) {
-          if (!categories[category]) categories[category] = [];
-          categories[category].push({item, date});
-        } else {
-          uncategorizedItems.push({item, date});
-        }
-        // console.log("processedItems added: ", item);
-        processedItems.add(item);
       });
-    });
-    // console.log('olListsToCategorize: ', olListsToCategorize);
-
-    // Ensure there's an <ol> element in the container.
-    if (!olListsToCategorize[0]) {
-      // Create <ol> if it doesn't exist
-      olElement = document.createElement('ol');
-      olListsToCategorize.appendChild(olElement);
-    }
-    let olElement = olListsToCategorize[0];
-
-    let orphans = 0;
-    if (conversations && conversations.length > 0) {
-      processOrphans(conversations, olElement);
-    }
-    // console.log("orphan item: ", orphans);
-    // console.log("uncategorizedItems: ", uncategorizedItems);
-    // Sort items within categories by date (ascending order)
-    for (const category in categories) {
-      categories[category].sort((a, b) => {
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return b.date - a.date;
-      });
-    }
-
-    // Deduplicate uncategorizedItems based on their data-id
-    const uniqueUncategorizedItems = [];
-    const seenIds = new Set();
-
-    uncategorizedItems.forEach((itemObj) => {
-      const itemId = itemObj.item.getAttribute('data-id');
-      if (!seenIds.has(itemId)) {
-        seenIds.add(itemId);
-        uniqueUncategorizedItems.push(itemObj);
+      if (dateStr !== undefined) {
+        conversations = removeObjectWithId(conversations, dataId);
+        // console.log("conversation removed: ", conversations.length, dataId);
       }
+      // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
+      const fallbackDate = (date2 !== undefined) ? date2 : new Date(0); // Epoch time for missing dates
+      const date = (date2 !== undefined)
+          ? date2
+          : dateStr
+              ? new Date(dateStr)
+              : fallbackDate;
+      // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
+      if (category) {
+        if (!categories[category]) categories[category] = [];
+        categories[category].push({item, date});
+      } else {
+        uncategorizedItems.push({item, date});
+      }
+      // console.log("processedItems added: ", item);
+      processedItems.add(item);
     });
+  });
+  // console.log('olListsToCategorize: ', olListsToCategorize);
 
-    // Sort by most recent date
-    uniqueUncategorizedItems.sort((a, b) => {
+  // Ensure there's an <ol> element in the container.
+  if (!olListsToCategorize[0]) {
+    // Create <ol> if it doesn't exist
+    olElement = document.createElement('ol');
+    olListsToCategorize.appendChild(olElement);
+  }
+  let olElement = olListsToCategorize[0];
+
+  let orphans = 0;
+  if (conversations && conversations.length > 0) {
+    processOrphans(conversations, olElement);
+  }
+  // console.log("orphan item: ", orphans);
+  // console.log("uncategorizedItems: ", uncategorizedItems);
+  // Sort items within categories by date (ascending order)
+  for (const category in categories) {
+    categories[category].sort((a, b) => {
       if (!a.date) return 1;
       if (!b.date) return -1;
-      return b.date - a.date; // Most recent first
+      return b.date - a.date;
     });
+  }
 
-    // Create a document fragment to hold new categorized <ol> elements
-    const fragment = document.createDocumentFragment();
+  // Deduplicate uncategorizedItems based on their data-id
+  const uniqueUncategorizedItems = [];
+  const seenIds = new Set();
 
-    // Create "Uncategorized" section first
-    if (uncategorizedItems.length > 0) {
-      const uncategorizedOlContainer = createCategoryContainer(
-          'Uncategorized',
-          uncategorizedItems.map((itemObj) => itemObj.item)
-      );
-      fragment.appendChild(uncategorizedOlContainer);
+  uncategorizedItems.forEach((itemObj) => {
+    const itemId = itemObj.item.getAttribute('data-id');
+    if (!seenIds.has(itemId)) {
+      seenIds.add(itemId);
+      uniqueUncategorizedItems.push(itemObj);
     }
-    const sortedCategories = collectSingleItems(categories, singleItems, fragment);
+  });
 
-    // Sort categories by the earliest date among their items (ascending order)
-    sortedCategories.sort((a, b) => {
-      const dateA = a.mostRecentDate || new Date(0); // Fallback to earliest possible date if undefined
-      const dateB = b.mostRecentDate || new Date(0);
-      return dateB - dateA; // For descending order, use `dateB - dateA`
-    });
+  // Sort by most recent date
+  uniqueUncategorizedItems.sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date - a.date; // Most recent first
+  });
 
-    //console.log('Sorted categories by earliest date:', sortedCategories);
+  // Create a document fragment to hold new categorized <ol> elements
+  const fragment = document.createDocumentFragment();
 
-    // Clear and sort the fragment
+  // Create "Uncategorized" section first
+  if (uncategorizedItems.length > 0) {
+    const uncategorizedOlContainer = createCategoryContainer(
+        'Uncategorized',
+        uncategorizedItems.map((itemObj) => itemObj.item)
+    );
+    fragment.appendChild(uncategorizedOlContainer);
+  }
+  const sortedCategories = collectSingleItems(categories, singleItems, fragment);
 
-    // Create categorized lists based on sorted categories and append them in order
-    sortedCategories.forEach(({category, items}) => {
-      const newOlContainer = createCategoryContainer(
-          category,
-          items,
-          wordColors[category]
-      );
-      fragment.appendChild(newOlContainer);
-    });
+  // Sort categories by the earliest date among their items (ascending order)
+  sortedCategories.sort((a, b) => {
+    const dateA = a.mostRecentDate || new Date(0); // Fallback to earliest possible date if undefined
+    const dateB = b.mostRecentDate || new Date(0);
+    return dateB - dateA; // For descending order, use `dateB - dateA`
+  });
 
-    // Clear all existing <ol> elements from the container, except the first one
-    listContainer.querySelectorAll('ol').forEach((ol, index) => {
-      if (index > 0) {
-        ol.parentElement?.remove();
-      }
-    });
+  //console.log('Sorted categories by earliest date:', sortedCategories);
 
-    listContainer.appendChild(fragment);
-    // Reinitialize button listeners and dropdowns after sorting
-    reinitializeDropdowns();
-    initializeButtonClickListeners();
-   
-  
+  // Clear and sort the fragment
+
+  // Create categorized lists based on sorted categories and append them in order
+  sortedCategories.forEach(({category, items}) => {
+    const newOlContainer = createCategoryContainer(
+        category,
+        items,
+        wordColors[category]
+    );
+    fragment.appendChild(newOlContainer);
+  });
+
+  // Clear all existing <ol> elements from the container, except the first one
+  listContainer.querySelectorAll('ol').forEach((ol, index) => {
+    if (index > 0) {
+      ol.parentElement?.remove();
+    }
+  });
+
+  listContainer.appendChild(fragment);
+  // Reinitialize button listeners and dropdowns after sorting
+  reinitializeDropdowns();
+  initializeButtonClickListeners();
+
+
 }
 
 function createCategoryContainer(category, items, color) {
@@ -669,58 +669,58 @@ function initializeMutationObserver() {
 }
 
 function monitorProjectChanges() {
-    const projectsContainer = document.querySelector('.projects-container-selector'); // Update the selector to match your Projects container
+  const projectsContainer = document.querySelector('.projects-container-selector'); // Update the selector to match your Projects container
 
-    if (!projectsContainer) {
-        console.error('Projects container not found.');
-        return;
-    }
+  if (!projectsContainer) {
+    console.error('Projects container not found.');
+    return;
+  }
 
-    // Create a MutationObserver
-    const observer = new MutationObserver((mutationsList) => {
-        mutationsList.forEach((mutation) => {
-            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                // Handle added items
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        console.log('New item added to Projects:', node);
-                        notifyScriptOfChange(node);
-                    }
-                });
-            }
-
-            if (mutation.type === 'attributes' && mutation.attributeName === 'data-project-id') {
-                console.log('Project attributes changed:', mutation.target);
-                notifyScriptOfChange(mutation.target);
-            }
+  // Create a MutationObserver
+  const observer = new MutationObserver((mutationsList) => {
+    mutationsList.forEach((mutation) => {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Handle added items
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            console.log('New item added to Projects:', node);
+            notifyScriptOfChange(node);
+          }
         });
-    });
+      }
 
-    // Configure the observer to watch for child additions and attribute changes
-    observer.observe(projectsContainer, {
-        childList: true,
-        subtree: true,
-        attributes: true,
+      if (mutation.type === 'attributes' && mutation.attributeName === 'data-project-id') {
+        console.log('Project attributes changed:', mutation.target);
+        notifyScriptOfChange(mutation.target);
+      }
     });
+  });
 
-    console.log('Monitoring project changes...');
+  // Configure the observer to watch for child additions and attribute changes
+  observer.observe(projectsContainer, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+  });
+
+  console.log('Monitoring project changes...');
 }
 
 // Function to notify the script of a change
 function notifyScriptOfChange(changedElement) {
-    console.log('Change detected:', changedElement);
+  console.log('Change detected:', changedElement);
 
-    // Perform any necessary actions (e.g., update sessionStorage or UI)
-    const projectId = changedElement.getAttribute('data-project-id');
-    const projectTitle = changedElement.textContent.trim();
-    console.log(`Project updated: ${projectId} - ${projectTitle}`);
+  // Perform any necessary actions (e.g., update sessionStorage or UI)
+  const projectId = changedElement.getAttribute('data-project-id');
+  const projectTitle = changedElement.textContent.trim();
+  console.log(`Project updated: ${projectId} - ${projectTitle}`);
 }
 
 
 
 function renameChatHandler(mutation) {
   const updatedTitleElement = mutation.target.closest(
-    '.relative.grow.overflow-hidden.whitespace-nowrap'
+      '.relative.grow.overflow-hidden.whitespace-nowrap'
   );
   if (!updatedTitleElement) return;
 
@@ -808,7 +808,7 @@ function validateListItems() {
 }
 
 function initializeButtonClickListeners() {
-   const listContainer = document.querySelector('.group\\/sidebar');
+  const listContainer = document.querySelector('.group\\/sidebar');
   if (!listContainer) return;
 
   listContainer.addEventListener('click', (event) => {
