@@ -1,0 +1,29 @@
+#kix-appview
+> div.left-sidebar-container.docs-ui-unprintable.left-sidebar-container-animation
+> div.left-sidebar-container-content
+> div.navigation-widget.navigation-widget-unified-styling.docs-material.navigation-widget-floating-navigation-button.navigation-location-indicator.outline-refresh.navigation-widget-hoverable.navigation-widget-chaptered.left-sidebar-container-content-child {
+    width: 100%;
+}
+
+#kix-appview > div.left-sidebar-container.docs-ui-unprintable.left-sidebar-container-animation{
+    width: 500px;
+}
+
+.outlines-widget-chaptered .navigation-item{
+    height: 100%;
+}
+
+.outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-0, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-1, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-2, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-3, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-4, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-5, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-6, .outlines-widget .outlines-widget-chaptered .chapter-container .navigation-item .navigation-item-level-7{
+    size: 10px;
+    height: 20px;
+}
+
+// #kix-appview > div.kix-appview-editor-container > div > div:nth-child(1) > div.kix-rotatingtilemanager.docs-ui-hit-region-surface{
+   //   left: 520px;
+   // }
+
+
+
+#docs-editor{
+    width: 100%;
+}
