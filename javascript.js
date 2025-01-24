@@ -125,7 +125,7 @@ function toggleLaTeXRendering() {
 
 function initializeButtons() {
   derenderButton.style.cssText = getButtonStyles();
-  derenderButton.textContent = `LaTeX: ${renderLatexEnabled}`;
+  derenderButton.textContent = `LaTeX: ${renderLatexEnabled ? 'on' : 'off'}`;
   derenderButton.addEventListener('click', () => toggleState('renderLatexEnabled', derenderButton));
 
   // Create container for the buttonsD
@@ -205,8 +205,13 @@ function toggleState(stateKey, button) {
   const currentState = JSON.parse(sessionStorage.getItem(stateKey));
   const newState = !currentState;
 
+  if (stateKey === 'renderLatexEnabled') {
+    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
+  } else {
+    // Default behavior for other buttons
+    button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
+  }
   sessionStorage.setItem(stateKey, JSON.stringify(newState));
-  button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
   console.log(`${stateKey}:`, newState);
 }
 
