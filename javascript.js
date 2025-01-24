@@ -1,3 +1,4 @@
+let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || true; // Default state
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
 let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
@@ -11,10 +12,12 @@ let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
 
 const offsetAmount = document.createElement('div');
+const derenderButton = document.createElement('button');
 const pauseButton = document.createElement('button');
 const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
+// Function to dynamically load KaTeX CSS and JS
 
 (function () {
   const originalFetch = window.fetch;
@@ -47,7 +50,6 @@ const sortListsButton = document.createElement('button');
   };
 })();
 
-
 document.addEventListener('DOMContentLoaded', () => {
   initializeButtons();
   setStates();
@@ -58,6 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function repeater() {
+  const latexInterval = setInterval(async () => {
+    if (!isScriptEnabled) return; // Skip execution if paused
+    try {
+      await toggleLaTeXRendering();
+    } catch (e) {
+      console.error('Error in latex interval:', e);
+    }
+  }, 100);
+
   const firstSort = setInterval(async () => {
     if (isPaused) return; // Skip execution if paused
     try {
@@ -87,7 +98,7 @@ function repeater() {
         if (isScrollEnabled) {
           await triggerScrollAndEvent();
         }
-        if (isScrollEnabled) {
+        if (isScriptEnabled) {
           await checkAndReplaceText();
         }
         if (isSortListsEnabled) {
@@ -104,14 +115,25 @@ function repeater() {
     }, 90000);
   }
 }
+function toggleLaTeXRendering() {
+  if (renderLatexEnabled) {
+    renderLaTeX();
+  } else {
+    derenderLaTeX();
+  }
+}
 
 function initializeButtons() {
+  derenderButton.style.cssText = getButtonStyles();
+  derenderButton.textContent = `LaTeX: ${renderLatexEnabled}`;
+  derenderButton.addEventListener('click', () => toggleState('renderLatexEnabled', derenderButton));
+
   // Create container for the buttonsD
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = `
     position: fixed;
     bottom: 50%;
-    right: 10px;
+    right: 40px;
     display: grid;
     gap: 10px;
   `;
@@ -137,6 +159,7 @@ function initializeButtons() {
   sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
 
   // Append buttons to the container
+  buttonContainer.appendChild(derenderButton);
   buttonContainer.appendChild(offsetAmount);
   buttonContainer.appendChild(pauseButton);
   buttonContainer.appendChild(scriptButton);
@@ -211,6 +234,7 @@ function getStates() {
   isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
   isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
   isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ;
+  renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')); // Default state
   apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
   dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 
@@ -228,7 +252,7 @@ function setStates() {
   sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
   sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
   sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-
+  sessionStorage.setItem('renderLatexEnabled', JSON.stringify(renderLatexEnabled));
 }
 
 function triggerScrollAndEvent() {
@@ -759,7 +783,7 @@ function reinitializeDropdowns() {
   });
 }
 
-// Helper function to manage local storage
+// Helper function to manage session storage
 function managesessionStorage(action, conversations = []) {
   const storageKey = 'conversations';
   if (action === 'get') {
@@ -834,4 +858,82 @@ function handleButtonClick(button) {
   if (buttonId === "No ID") {
     console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
   }
+}
+// Function to render LaTeX equations using KaTeX
+function renderLaTeX() {
+  const blockRegex = /\\\[\s*(.*?)\s*\\\]/g; // Matches \[ ... \]
+  const inlineRegex = /\\\(\s*(.*?)\s*\\\)/g; // Matches \( ... \]
+  const doubleDollarRegex = /\$\$\s*(.*?)\s*\$\$/g; // Matches $$ ... $$
+
+  const textNodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+
+  while ((node = textNodes.nextNode())) {
+    const parent = node.parentNode;
+
+    // Skip if already rendered by KaTeX
+    if (parent.tagName === "SPAN" && parent.classList.contains("katex")) continue;
+
+    let text = node.nodeValue;
+    let updatedText = text;
+
+    // Replace LaTeX expressions
+    updatedText = updatedText.replace(blockRegex, (_, latex) => {
+      const div = document.createElement("div");
+      try {
+        div.setAttribute("data-original", `\\[${latex}\\]`); // Store original LaTeX
+        katex.render(latex, div, { displayMode: true });
+        return div.outerHTML;
+      } catch (error) {
+        console.error("KaTeX Block Render Error:", error, latex);
+        return `Error: ${latex}`;
+      }
+    });
+
+    updatedText = updatedText.replace(inlineRegex, (_, latex) => {
+      const span = document.createElement("span");
+      try {
+        span.setAttribute("data-original", `\\(${latex}\\)`); // Store original LaTeX
+        katex.render(latex, span, { displayMode: false });
+        return span.outerHTML;
+      } catch (error) {
+        console.error("KaTeX Inline Render Error:", error, latex);
+        return `Error: ${latex}`;
+      }
+    });
+
+    updatedText = updatedText.replace(doubleDollarRegex, (_, latex) => {
+      const span = document.createElement("span");
+      try {
+        span.setAttribute("data-original", `$$${latex}$$`); // Store original LaTeX
+        katex.render(latex, span, { displayMode: false });
+        return span.outerHTML;
+      } catch (error) {
+        console.error("KaTeX Double Dollar Render Error:", error, latex);
+        return `Error: ${latex}`;
+      }
+    });
+
+    if (updatedText !== text) {
+      const wrapper = document.createElement("span");
+      wrapper.innerHTML = updatedText;
+      parent.replaceChild(wrapper, node);
+    }
+  }
+}
+
+function derenderLaTeX() {
+  // Find all rendered KaTeX elements
+  const renderedElements = document.querySelectorAll('[data-original]');
+
+  renderedElements.forEach((element) => {
+    const originalContent = element.getAttribute('data-original');
+    if (originalContent) {
+      // Replace the rendered KaTeX element with the original LaTeX
+      const textNode = document.createTextNode(originalContent);
+      element.replaceWith(textNode);
+    }
+  });
+
+  console.log('De-rendered all LaTeX elements.');
 }
