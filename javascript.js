@@ -1,4 +1,4 @@
-let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || true; // Default state
+let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || false; // Default state
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
 let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
@@ -9,7 +9,7 @@ let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
-let pauseTimeLeft = 30; // Countdown in seconds
+let pauseTimeLeft = 30; // Countdown in seconds 
 
 const offsetAmount = document.createElement('div');
 const derenderButton = document.createElement('button');
@@ -71,18 +71,21 @@ function repeater() {
 
   const firstSort = setInterval(async () => {
     if (isPaused) return; // Skip execution if paused
+    let switcheroo = false;
     try {
       await getStates();
       if (isScrollEnabled) {
-        await triggerScrollAndEvent();
+        switcheroo ? await triggerScrollAndEvent(300) : await triggerScrollAndEvent();
       }
       if (isScriptEnabled) {
         await checkAndReplaceText();
       }
+      
       if (isSortListsEnabled) {
         await sortLists();
         await validateListItems();
       }
+      switcheroo = !switcheroo;
       await setStates();
     } catch (e) {
       console.error('Error in sortLists interval:', e);
@@ -93,18 +96,23 @@ function repeater() {
     clearInterval(firstSort);
     setInterval(async () => {
       if (isPaused) return; // Skip execution if paused
+      let switcheroo = false;
       try {
         await getStates();
         if (isScrollEnabled) {
-          await triggerScrollAndEvent();
+          switcheroo ? await triggerScrollAndEvent(300) : await triggerScrollAndEvent();
         }
         if (isScriptEnabled) {
           await checkAndReplaceText();
+        }
+        if (isScrollEnabled) {
+          await triggerScrollAndEvent();
         }
         if (isSortListsEnabled) {
           await sortLists();
           await validateListItems();
         }
+        switcheroo = !switcheroo;
         await setStates();
       } catch (e) {
         console.error(
@@ -155,7 +163,7 @@ function initializeButtons() {
 
 
   sortListsButton.style.cssText = getButtonStyles();
-  sortListsButton.textContent = `Lists: ${isSortListsEnabled}`;
+  sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
   sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
 
   // Append buttons to the container
@@ -205,14 +213,21 @@ function toggleState(stateKey, button) {
   const currentState = JSON.parse(sessionStorage.getItem(stateKey));
   const newState = !currentState;
 
-  if (stateKey === 'renderLatexEnabled') {
-    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
-  } else {
-    // Default behavior for other buttons
-    button.textContent = `${stateKey.replace('is', '').replace(/([A-Z])/g, ' $1')}: ${newState}`;
-  }
+    if (stateKey === 'renderLatexEnabled') {
+        button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
+    } else {
+        // Default behavior for other buttons
+      button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
+    }
   sessionStorage.setItem(stateKey, JSON.stringify(newState));
   console.log(`${stateKey}:`, newState);
+}
+
+function formatStateKey(stateKey) {
+    return stateKey
+        .replace(/([A-Z])/g, ' $1')  // Add space before uppercase letters
+        .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '')  // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
+        .trim();  // Remove any leading/trailing spaces
 }
 
 // Function to get button styles
@@ -260,7 +275,7 @@ function setStates() {
   sessionStorage.setItem('renderLatexEnabled', JSON.stringify(renderLatexEnabled));
 }
 
-function triggerScrollAndEvent() {
+function triggerScrollAndEvent(amount = 0) {
   // Find the scrolling container
   const scrollContainer = document.querySelector(
       '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
@@ -278,8 +293,12 @@ function triggerScrollAndEvent() {
     scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
     console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
   }
-  // Otherwise, scroll down by a fixed amount
-  scrollContainer.scrollTop += 300; // Scroll down by 300px (adjust as needed)
+  else if (amount = 0) {
+     scrollContainer.scrollTop = 0;
+  } else {
+    // Otherwise, scroll down by a fixed amount
+     scrollContainer.scrollTop += scrollContainer.scrollHeight - 10 - amount; // Scroll down by 300px (adjust as needed)
+  }
   // Dispatch the scroll event to trigger the website's fetching logic
   scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
   console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
