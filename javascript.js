@@ -9,7 +9,8 @@ let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
-let pauseTimeLeft = 30; // Countdown in seconds 
+let pauseTimeLeft = 30; // Countdown in seconds
+let switcheroo = false;
 
 const offsetAmount = document.createElement('div');
 const derenderButton = document.createElement('button');
@@ -71,16 +72,20 @@ function repeater() {
 
   const firstSort = setInterval(async () => {
     if (isPaused) return; // Skip execution if paused
-    let switcheroo = false;
+
     try {
       await getStates();
       if (isScrollEnabled) {
-        switcheroo ? await triggerScrollAndEvent(300) : await triggerScrollAndEvent();
+        if (switcheroo) {
+          await triggerScrollAndEvent(300);
+        } else {
+          await triggerScrollAndEvent();
+        }
       }
       if (isScriptEnabled) {
         await checkAndReplaceText();
       }
-      
+
       if (isSortListsEnabled) {
         await sortLists();
         await validateListItems();
@@ -100,7 +105,11 @@ function repeater() {
       try {
         await getStates();
         if (isScrollEnabled) {
-          switcheroo ? await triggerScrollAndEvent(300) : await triggerScrollAndEvent();
+          if (switcheroo) {
+            await triggerScrollAndEvent(300);
+          } else {
+            await triggerScrollAndEvent();
+          }
         }
         if (isScriptEnabled) {
           await checkAndReplaceText();
@@ -181,16 +190,21 @@ function initializeButtons() {
 // Function to toggle pause state
 function togglePause(pauseButton) {
   if (isPaused) {
-    // If already paused, unpause
-    clearInterval(pauseTimeout); // Stop the countdown
+    clearInterval(pauseTimeout);
     isPaused = false;
-    pauseTimeLeft = 30; // Reset countdown
+    pauseTimeLeft = 30;
     pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
+
+    // Ensure stored data is refreshed before resuming
+    setTimeout(() => {
+      getStates();  // Refresh session storage values
+      console.log('Session storage refreshed after pause.');
+    }, 500); // Short delay before resuming
+
     console.log('Repeater unpaused');
   } else {
-    // If not paused, start pause
     isPaused = true;
-    pauseButton.disabled = false; // Keep button enabled to allow unpausing
+    pauseButton.disabled = false;
     pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
 
     pauseTimeout = setInterval(() => {
@@ -202,6 +216,12 @@ function togglePause(pauseButton) {
         isPaused = false;
         pauseTimeLeft = 30;
         pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
+
+        setTimeout(() => {
+          getStates(); // Ensure latest data is fetched before resuming
+          console.log('Session storage refreshed after timeout.');
+        }, 500);
+
         console.log('Repeater resumed');
       }
     }, 1000);
@@ -213,21 +233,21 @@ function toggleState(stateKey, button) {
   const currentState = JSON.parse(sessionStorage.getItem(stateKey));
   const newState = !currentState;
 
-    if (stateKey === 'renderLatexEnabled') {
-        button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
-    } else {
-        // Default behavior for other buttons
-      button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
-    }
+  if (stateKey === 'renderLatexEnabled') {
+    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
+  } else {
+    // Default behavior for other buttons
+    button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
+  }
   sessionStorage.setItem(stateKey, JSON.stringify(newState));
   console.log(`${stateKey}:`, newState);
 }
 
 function formatStateKey(stateKey) {
-    return stateKey
-        .replace(/([A-Z])/g, ' $1')  // Add space before uppercase letters
-        .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '')  // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
-        .trim();  // Remove any leading/trailing spaces
+  return stateKey
+      .replace(/([A-Z])/g, ' $1')  // Add space before uppercase letters
+      .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '')  // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
+      .trim();  // Remove any leading/trailing spaces
 }
 
 // Function to get button styles
@@ -251,22 +271,31 @@ function getButtonStyles() {
 }
 
 function getStates() {
-  isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
-  isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
-  isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled')) ;
-  renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')); // Default state
-  apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
-  dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
+  try {
+    isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
+    isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
+    isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled'));
+    renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled'));
+    apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
+    dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 
-  offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
+    // Force refresh of conversation data to avoid stale IDs
+    let updatedConversations = managesessionStorage('get') || [];
+    managesessionStorage('set', updatedConversations);
 
-  if (apiOffset >= dataTotal){
-    if(isScrollEnabled) {
-      isSortListsEnabled = true;
+    offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
+
+    if (apiOffset >= dataTotal) {
+      if (isScrollEnabled) {
+        isSortListsEnabled = true;
+      }
+      isScrollEnabled = false;
     }
-    isScrollEnabled = false;
+  } catch (error) {
+    console.error('Error in getStates:', error);
   }
 }
+
 
 function setStates() {
   sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
@@ -293,11 +322,11 @@ function triggerScrollAndEvent(amount = 0) {
     scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
     console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
   }
-  else if (amount = 0) {
-     scrollContainer.scrollTop = 0;
+  else if (amount === 0) {
+    scrollContainer.scrollTop = 0;
   } else {
     // Otherwise, scroll down by a fixed amount
-     scrollContainer.scrollTop += scrollContainer.scrollHeight - 10 - amount; // Scroll down by 300px (adjust as needed)
+    scrollContainer.scrollTop += scrollContainer.scrollHeight - 10 - amount; // Scroll down by 300px (adjust as needed)
   }
   // Dispatch the scroll event to trigger the website's fetching logic
   scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
@@ -360,10 +389,12 @@ function processOrphans(conversations, olElement) {
 }
 
 function checkAndReplaceText() {
-
+  // Select both existing elements and the new OL path you want to include
   const divElements = document.querySelectorAll(
-      '.relative.grow.overflow-hidden.whitespace-nowrap'
+      '.relative.grow.overflow-hidden.whitespace-nowrap, ' +
+      'body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div > section > div:nth-child(2) > div > div > div > div > div > div > div.mb-14.mt-6 > ol > li > a > div > div > div.flex-grow > div.text-sm.font-medium'
   );
+
   if (divElements.length === 0) return;
 
   const colors = [
@@ -379,6 +410,7 @@ function checkAndReplaceText() {
   let colorIndex = 0;
   let wordColors = {};
   let conversations;
+
   try {
     wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
     conversations = managesessionStorage('get') || {};
@@ -391,7 +423,6 @@ function checkAndReplaceText() {
     let textContent = divElement.textContent;
     conversations.forEach((item) => {
       if (item.title === textContent) {
-        //console.log("update_time: ", item.update_time.trim(), "id: ", item.id.trim());
         divElement.closest('li')?.setAttribute('data-date', item.update_time);
         divElement.closest('li')?.setAttribute('data-id', item.id);
       }
@@ -528,7 +559,6 @@ function sortLists() {
       processedItems.add(item);
     });
   });
-  // console.log('olListsToCategorize: ', olListsToCategorize);
 
   // Ensure there's an <ol> element in the container.
   if (!olListsToCategorize[0]) {
@@ -542,8 +572,7 @@ function sortLists() {
   if (conversations && conversations.length > 0) {
     processOrphans(conversations, olElement);
   }
-  // console.log("orphan item: ", orphans);
-  // console.log("uncategorizedItems: ", uncategorizedItems);
+
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
     categories[category].sort((a, b) => {
@@ -693,8 +722,6 @@ function initializeMutationObserver() {
       ) {
         isObserving = false;
         try {
-
-          reinitializeHoverStates();
           checkAndReplaceText();
           sortLists();
           validateListItems();
@@ -764,8 +791,6 @@ function notifyScriptOfChange(changedElement) {
   console.log(`Project updated: ${projectId} - ${projectTitle}`);
 }
 
-
-
 function renameChatHandler(mutation) {
   const updatedTitleElement = mutation.target.closest(
       '.relative.grow.overflow-hidden.whitespace-nowrap'
@@ -777,10 +802,11 @@ function renameChatHandler(mutation) {
 
   if (!chatId || !updatedTitle) return;
 
-  // Update the conversation title in sessionStorage
-  const conversations = managesessionStorage('get') || [];
-  const chat = conversations.find((item) => item.id === chatId);
+  // Ensure session storage is refreshed before updating
+  let conversations = managesessionStorage('get') || [];
+  conversations = mergeAndCleanConversations(conversations, []);
 
+  const chat = conversations.find((item) => item.id === chatId);
   if (chat) {
     chat.title = updatedTitle;
     managesessionStorage('set', conversations);
@@ -790,6 +816,7 @@ function renameChatHandler(mutation) {
     console.warn(`Chat ID not found in sessionStorage: ${chatId}`);
   }
 }
+
 
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
@@ -883,6 +910,7 @@ function handleButtonClick(button) {
     console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
   }
 }
+
 // Function to render LaTeX equations using KaTeX
 function renderLaTeX() {
   const blockRegex = /\\\[\s*(.*?)\s*\\\]/g; // Matches \[ ... \]
