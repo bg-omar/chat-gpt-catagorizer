@@ -1,16 +1,21 @@
-let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || false; // Default state
-let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
-let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
+let renderLatexEnabled =
+    JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || false; // Default state
+let isScriptEnabled =
+    JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
+let isScrollEnabled =
+    JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
-sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ;
+sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false));
 
-let dataTotal  = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
+let dataTotal = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
 let switcheroo = false;
+let latexInterval;
+let firstSort;
 
 const offsetAmount = document.createElement('div');
 const derenderButton = document.createElement('button');
@@ -28,21 +33,31 @@ const sortListsButton = document.createElement('button');
     const response = await originalFetch(...args);
 
     // Intercept the API calls for conversations
-    if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
+    if (
+        typeof resource === 'string' &&
+        resource.includes('/backend-api/conversations')
+    ) {
       const clonedResponse = response.clone(); // Clone the response to read it without consuming it
       const data = await clonedResponse.json();
 
-      sessionStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
+      sessionStorage.setItem('dataTotal', JSON.stringify(data.total)); // Default state
       // Store the API data in localStorage
-      const existingData = JSON.parse(sessionStorage.getItem("conversations")) || [];
+      const existingData =
+          JSON.parse(sessionStorage.getItem('conversations')) || [];
       const newConversations = data.items.map((item) => ({
         ...item,
         update_time: item.update_time ? new Date(item.update_time) : null,
       }));
 
-      const mergedConversations = mergeAndCleanConversations(existingData, newConversations);
-      sessionStorage.setItem("conversations", JSON.stringify(mergedConversations));
-      sessionStorage.setItem("apiOffset", JSON.stringify(apiOffset));
+      const mergedConversations = mergeAndCleanConversations(
+          existingData,
+          newConversations
+      );
+      sessionStorage.setItem(
+          'conversations',
+          JSON.stringify(mergedConversations)
+      );
+      sessionStorage.setItem('apiOffset', JSON.stringify(apiOffset));
       // Save the offset to avoid re-fetching the same data
       apiOffset = data.offset + data.limit;
     }
@@ -56,12 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setStates();
   repeater();
   monitorProjectChanges();
-  //initializeMutationObserver();
+ // initializeMutationObserver();
   initializeButtonClickListeners();
 });
 
+
 function repeater() {
-  const latexInterval = setInterval(async () => {
+  latexInterval = setInterval(async () => {
     if (!isScriptEnabled) return; // Skip execution if paused
     try {
       await toggleLaTeXRendering();
@@ -70,11 +86,12 @@ function repeater() {
     }
   }, 100);
 
-  const firstSort = setInterval(async () => {
+  firstSort = setInterval(async () => {
     if (isPaused) return; // Skip execution if paused
 
     try {
       await getStates();
+
       if (isScrollEnabled) {
         if (switcheroo) {
           await triggerScrollAndEvent(300);
@@ -82,14 +99,17 @@ function repeater() {
           await triggerScrollAndEvent();
         }
       }
+      
       if (isScriptEnabled) {
         await checkAndReplaceText();
       }
 
+      // Make sure sorting runs when enabled
       if (isSortListsEnabled) {
         await sortLists();
         await validateListItems();
       }
+
       switcheroo = !switcheroo;
       await setStates();
     } catch (e) {
@@ -99,9 +119,9 @@ function repeater() {
 
   if (apiOffset > dataTotal) {
     clearInterval(firstSort);
+       console.log('Start 2nd interval');
     setInterval(async () => {
       if (isPaused) return; // Skip execution if paused
-      let switcheroo = false;
       try {
         await getStates();
         if (isScrollEnabled) {
@@ -114,36 +134,46 @@ function repeater() {
         if (isScriptEnabled) {
           await checkAndReplaceText();
         }
-        if (isScrollEnabled) {
-          await triggerScrollAndEvent();
-        }
+
+        // Explicitly check and trigger sorting
         if (isSortListsEnabled) {
+          console.log('Triggering sortLists() due to sessionStorage change.');
           await sortLists();
-          await validateListItems();
+        } else {
+          console.log('Not sortLists()');
         }
+
         switcheroo = !switcheroo;
         await setStates();
       } catch (e) {
-        console.error(
-            'Error in checkAndReplaceText interval after timeout:',
-            e
-        );
+        console.error('Error in checkAndReplaceText interval after timeout:', e);
       }
     }, 90000);
   }
 }
+
+
 function toggleLaTeXRendering() {
   if (renderLatexEnabled) {
     renderLaTeX();
   } else {
-    derenderLaTeX();
+    const hasLatex = document.querySelector('[data-original]') !== null;
+    if (hasLatex) {
+      derenderLaTeX();
+    } else {
+      console.log('No LaTeX to de-render.');
+      clearInterval(latexInterval); // Stop the interval if there's no LaTeX left
+    }
   }
 }
+
 
 function initializeButtons() {
   derenderButton.style.cssText = getButtonStyles();
   derenderButton.textContent = `LaTeX: ${renderLatexEnabled ? 'on' : 'off'}`;
-  derenderButton.addEventListener('click', () => toggleState('renderLatexEnabled', derenderButton));
+  derenderButton.addEventListener('click', () =>
+      toggleState('renderLatexEnabled', derenderButton)
+  );
 
   // Create container for the buttonsD
   const buttonContainer = document.createElement('div');
@@ -164,16 +194,21 @@ function initializeButtons() {
 
   scriptButton.style.cssText = getButtonStyles();
   scriptButton.textContent = `Script: ${isScriptEnabled}`;
-  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
+  scriptButton.addEventListener('click', () =>
+      toggleState('isScriptEnabled', scriptButton)
+  );
 
   scrollButton.style.cssText = getButtonStyles();
   scrollButton.textContent = `Scroll: ${isScrollEnabled}`;
-  scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
-
+  scrollButton.addEventListener('click', () =>
+      toggleState('isScrollEnabled', scrollButton)
+  );
 
   sortListsButton.style.cssText = getButtonStyles();
   sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
-  sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
+  sortListsButton.addEventListener('click', () =>
+      toggleState('isSortListsEnabled', sortListsButton)
+  );
 
   // Append buttons to the container
   buttonContainer.appendChild(derenderButton);
@@ -197,7 +232,7 @@ function togglePause(pauseButton) {
 
     // Ensure stored data is refreshed before resuming
     setTimeout(() => {
-      getStates();  // Refresh session storage values
+      getStates(); // Refresh session storage values
       console.log('Session storage refreshed after pause.');
     }, 500); // Short delay before resuming
 
@@ -245,9 +280,9 @@ function toggleState(stateKey, button) {
 
 function formatStateKey(stateKey) {
   return stateKey
-      .replace(/([A-Z])/g, ' $1')  // Add space before uppercase letters
-      .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '')  // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
-      .trim();  // Remove any leading/trailing spaces
+      .replace(/([A-Z])/g, ' $1') // Add space before uppercase letters
+      .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '') // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
+      .trim(); // Remove any leading/trailing spaces
 }
 
 // Function to get button styles
@@ -276,6 +311,8 @@ function getStates() {
     isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled'));
     renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled'));
+
+  
     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
     dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
 
@@ -286,22 +323,31 @@ function getStates() {
     offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
 
     if (apiOffset >= dataTotal) {
+      console.log('offset > total');
+      clearInterval(firstSort);
       if (isScrollEnabled) {
         isSortListsEnabled = true;
+        sessionStorage.setItem('isSortListsEnabled', JSON.stringify(true));
+        setStates(); // Make sure UI updates
       }
       isScrollEnabled = false;
+     repeater();
     }
+      console.log('Finished get states');
   } catch (error) {
     console.error('Error in getStates:', error);
   }
 }
 
-
 function setStates() {
   sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
   sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
-  sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-  sessionStorage.setItem('renderLatexEnabled', JSON.stringify(renderLatexEnabled));
+  sessionStorage.setItem('isSortListsEnabled',JSON.stringify(isSortListsEnabled));
+  sessionStorage.setItem('renderLatexEnabled',JSON.stringify(renderLatexEnabled));
+      
+   // Update the button text to match the state
+  sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
+        console.log('Finished set states');
 }
 
 function triggerScrollAndEvent(amount = 0) {
@@ -315,14 +361,16 @@ function triggerScrollAndEvent(amount = 0) {
     return;
   }
   // Check if the container can scroll further
-  if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
+  if (
+      scrollContainer.scrollTop + scrollContainer.clientHeight >=
+      scrollContainer.scrollHeight
+  ) {
     // If at the bottom, scroll back to the top
     scrollContainer.scrollTop = 0;
     // Dispatch the scroll event to trigger the website's fetching logic
     scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-  }
-  else if (amount === 0) {
+    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight);
+  } else if (amount === 0) {
     scrollContainer.scrollTop = 0;
   } else {
     // Otherwise, scroll down by a fixed amount
@@ -330,7 +378,7 @@ function triggerScrollAndEvent(amount = 0) {
   }
   // Dispatch the scroll event to trigger the website's fetching logic
   scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-  console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+  console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight);
 
   if (apiOffset >= dataTotal) {
     isScrollEnabled = false;
@@ -340,13 +388,18 @@ function triggerScrollAndEvent(amount = 0) {
 }
 
 function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
-  const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5');
+  const container = document.querySelector(
+      '.relative.mt-5.first\\:mt-0.last\\:mb-5'
+  );
   if (container) {
     console.log('Container loaded.');
     callback();
   } else if (retryCount < maxRetries) {
     console.log('Waiting for container...');
-    setTimeout(() => waitForContainerToLoad(callback, maxRetries, retryCount + 1), 100);
+    setTimeout(
+        () => waitForContainerToLoad(callback, maxRetries, retryCount + 1),
+        100
+    );
   } else {
     console.error('Max retries reached. Container not found.');
   }
@@ -354,10 +407,10 @@ function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
 
 function createListItem(conversation, index) {
   const li = document.createElement('li');
-  li.className = "relative";
-  li.setAttribute("data-testid", `history-item-${index}`);
-  li.setAttribute("data-date", conversation.update_time);
-  li.setAttribute("data-id", conversation.id);
+  li.className = 'relative';
+  li.setAttribute('data-testid', `history-item-${index}`);
+  li.setAttribute('data-date', conversation.update_time);
+  li.setAttribute('data-id', conversation.id);
 
   li.innerHTML = `
     <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: #171717;">
@@ -398,14 +451,59 @@ function checkAndReplaceText() {
   if (divElements.length === 0) return;
 
   const colors = [
-    '#f0f', '#FF7E00', '#64edd3', '#0f0', '#3cc', '#ff0', '#f00', '#0ff',
-    '#336699', 'gray', 'silver', '#CC99FF', '#6633FF', '#66FF99', '#FF6633',
-    '#66CCCC', '#33CC33', 'red', 'purple', 'green', 'lime', 'olive', 'yellow',
-    'blue', 'teal', 'aqua', '#FFC0CB', '#8A2BE2', '#5F9EA0', '#7FFF00',
-    '#DC143C', '#00FFFF', '#FFD700', '#ADFF2F', '#4B0082', '#FF4500',
-    '#DA70D6', '#EE82EE', '#20B2AA', '#BA55D3', '#4682B4', '#D2691E',
-    '#40E0D0', '#6A5ACD', '#B22222', '#808000', '#708090', '#8B4513',
-    '#FF1493', '#00FA9A', '#B0C4DE', '#F5DEB3', '#00CED1'
+    '#f0f',
+    '#FF7E00',
+    '#64edd3',
+    '#0f0',
+    '#3cc',
+    '#ff0',
+    '#f00',
+    '#0ff',
+    '#336699',
+    'gray',
+    'silver',
+    '#CC99FF',
+    '#6633FF',
+    '#66FF99',
+    '#FF6633',
+    '#66CCCC',
+    '#33CC33',
+    'red',
+    'purple',
+    'green',
+    'lime',
+    'olive',
+    'yellow',
+    'blue',
+    'teal',
+    'aqua',
+    '#FFC0CB',
+    '#8A2BE2',
+    '#5F9EA0',
+    '#7FFF00',
+    '#DC143C',
+    '#00FFFF',
+    '#FFD700',
+    '#ADFF2F',
+    '#4B0082',
+    '#FF4500',
+    '#DA70D6',
+    '#EE82EE',
+    '#20B2AA',
+    '#BA55D3',
+    '#4682B4',
+    '#D2691E',
+    '#40E0D0',
+    '#6A5ACD',
+    '#B22222',
+    '#808000',
+    '#708090',
+    '#8B4513',
+    '#FF1493',
+    '#00FA9A',
+    '#B0C4DE',
+    '#F5DEB3',
+    '#00CED1',
   ];
   let colorIndex = 0;
   let wordColors = {};
@@ -457,7 +555,7 @@ function checkAndReplaceText() {
 }
 
 function collectSingleItems(categories, singleItems, fragment) {
-  if(!isSortListsEnabled) return;
+  if (!isSortListsEnabled) return;
   // Separate out single-item categories
   const sortedCategories = [];
   for (const category in categories) {
@@ -498,8 +596,10 @@ function sortLists() {
   const categories = {};
   const uncategorizedItems = [];
   const singleItems = []; // To collect single item categories
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+  const listContainer = document.querySelector('div.flex.flex-col.gap-2.text-token-text-primary.text-sm');
   if (!listContainer) return;
+
+  console.log('Sorting Started');
 
   const originalOlLists = listContainer.querySelectorAll('ol');
   const olListsToCategorize = Array.from(originalOlLists);
@@ -542,18 +642,19 @@ function sortLists() {
         // console.log("conversation removed: ", conversations.length, dataId);
       }
       // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
-      const fallbackDate = (date2 !== undefined) ? date2 : new Date(0); // Epoch time for missing dates
-      const date = (date2 !== undefined)
-          ? date2
-          : dateStr
-              ? new Date(dateStr)
-              : fallbackDate;
+      const fallbackDate = date2 !== undefined ? date2 : new Date(0); // Epoch time for missing dates
+      const date =
+          date2 !== undefined
+              ? date2
+              : dateStr
+                  ? new Date(dateStr)
+                  : fallbackDate;
       // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
       if (category) {
         if (!categories[category]) categories[category] = [];
-        categories[category].push({item, date});
+        categories[category].push({ item, date });
       } else {
-        uncategorizedItems.push({item, date});
+        uncategorizedItems.push({ item, date });
       }
       // console.log("processedItems added: ", item);
       processedItems.add(item);
@@ -612,7 +713,11 @@ function sortLists() {
     );
     fragment.appendChild(uncategorizedOlContainer);
   }
-  const sortedCategories = collectSingleItems(categories, singleItems, fragment);
+  const sortedCategories = collectSingleItems(
+      categories,
+      singleItems,
+      fragment
+  );
 
   // Sort categories by the earliest date among their items (ascending order)
   sortedCategories.sort((a, b) => {
@@ -626,7 +731,7 @@ function sortLists() {
   // Clear and sort the fragment
 
   // Create categorized lists based on sorted categories and append them in order
-  sortedCategories.forEach(({category, items}) => {
+  sortedCategories.forEach(({ category, items }) => {
     const newOlContainer = createCategoryContainer(
         category,
         items,
@@ -646,8 +751,6 @@ function sortLists() {
   // Reinitialize button listeners and dropdowns after sorting
   reinitializeDropdowns();
   initializeButtonClickListeners();
-
-
 }
 
 function createCategoryContainer(category, items, color) {
@@ -709,7 +812,7 @@ function initializeMutationObserver() {
       '.relative.grow.overflow-hidden.whitespace-nowrap'
   );
 
-  const config = {childList: true, subtree: true, characterData: true};
+  const config = { childList: true, subtree: true, characterData: true };
 
   const callback = (mutationsList) => {
     // Use a flag to prevent recursive triggering of the observer
@@ -744,7 +847,9 @@ function initializeMutationObserver() {
 }
 
 function monitorProjectChanges() {
-  const projectsContainer = document.querySelector('.projects-container-selector'); // Update the selector to match your Projects container
+  const projectsContainer = document.querySelector(
+      '.projects-container-selector'
+  ); // Update the selector to match your Projects container
 
   if (!projectsContainer) {
     console.error('Projects container not found.');
@@ -764,7 +869,10 @@ function monitorProjectChanges() {
         });
       }
 
-      if (mutation.type === 'attributes' && mutation.attributeName === 'data-project-id') {
+      if (
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'data-project-id'
+      ) {
         console.log('Project attributes changed:', mutation.target);
         notifyScriptOfChange(mutation.target);
       }
@@ -816,7 +924,6 @@ function renameChatHandler(mutation) {
     console.warn(`Chat ID not found in sessionStorage: ${chatId}`);
   }
 }
-
 
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
@@ -877,7 +984,9 @@ function validateListItems() {
   listItems.forEach((item) => {
     const button = item.querySelector('button');
     if (!button) {
-      console.error(`List item with ID ${item.getAttribute('data-id')} is missing a button.`);
+      console.error(
+          `List item with ID ${item.getAttribute('data-id')} is missing a button.`
+      );
     }
   });
 }
@@ -895,7 +1004,7 @@ function initializeButtonClickListeners() {
 }
 
 function handleButtonClick(button) {
-  const buttonId = button.id || "No ID";
+  const buttonId = button.id || 'No ID';
   console.log(`Button with ID ${buttonId} was clicked!`);
 
   // Reset the countdown
@@ -906,8 +1015,10 @@ function handleButtonClick(button) {
     togglePause(pauseButton);
   }
 
-  if (buttonId === "No ID") {
-    console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
+  if (buttonId === 'No ID') {
+    console.warn(
+        'Button clicked without an ID. Ensure all buttons are assigned unique IDs.'
+    );
   }
 }
 
@@ -917,57 +1028,61 @@ function renderLaTeX() {
   const inlineRegex = /\\\(\s*(.*?)\s*\\\)/g; // Matches \( ... \]
   const doubleDollarRegex = /\$\$\s*(.*?)\s*\$\$/g; // Matches $$ ... $$
 
-  const textNodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const textNodes = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT
+  );
   let node;
 
   while ((node = textNodes.nextNode())) {
     const parent = node.parentNode;
 
     // Skip if already rendered by KaTeX
-    if (parent.tagName === "SPAN" && parent.classList.contains("katex")) continue;
+    if (parent.tagName === 'SPAN' && parent.classList.contains('katex'))
+      continue;
 
     let text = node.nodeValue;
     let updatedText = text;
 
     // Replace LaTeX expressions
     updatedText = updatedText.replace(blockRegex, (_, latex) => {
-      const div = document.createElement("div");
+      const div = document.createElement('div');
       try {
-        div.setAttribute("data-original", `\\[${latex}\\]`); // Store original LaTeX
+        div.setAttribute('data-original', `\\[${latex}\\]`); // Store original LaTeX
         katex.render(latex, div, { displayMode: true });
         return div.outerHTML;
       } catch (error) {
-        console.error("KaTeX Block Render Error:", error, latex);
+        console.error('KaTeX Block Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     updatedText = updatedText.replace(inlineRegex, (_, latex) => {
-      const span = document.createElement("span");
+      const span = document.createElement('span');
       try {
-        span.setAttribute("data-original", `\\(${latex}\\)`); // Store original LaTeX
+        span.setAttribute('data-original', `\\(${latex}\\)`); // Store original LaTeX
         katex.render(latex, span, { displayMode: false });
         return span.outerHTML;
       } catch (error) {
-        console.error("KaTeX Inline Render Error:", error, latex);
+        console.error('KaTeX Inline Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     updatedText = updatedText.replace(doubleDollarRegex, (_, latex) => {
-      const span = document.createElement("span");
+      const span = document.createElement('span');
       try {
-        span.setAttribute("data-original", `$$${latex}$$`); // Store original LaTeX
+        span.setAttribute('data-original', `$$${latex}$$`); // Store original LaTeX
         katex.render(latex, span, { displayMode: false });
         return span.outerHTML;
       } catch (error) {
-        console.error("KaTeX Double Dollar Render Error:", error, latex);
+        console.error('KaTeX Double Dollar Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     if (updatedText !== text) {
-      const wrapper = document.createElement("span");
+      const wrapper = document.createElement('span');
       wrapper.innerHTML = updatedText;
       parent.replaceChild(wrapper, node);
     }
@@ -977,6 +1092,11 @@ function renderLaTeX() {
 function derenderLaTeX() {
   // Find all rendered KaTeX elements
   const renderedElements = document.querySelectorAll('[data-original]');
+
+  if (renderedElements.length === 0) {
+    console.log('No LaTeX elements to de-render.'); // Avoid unnecessary logging
+    return;
+  }
 
   renderedElements.forEach((element) => {
     const originalContent = element.getAttribute('data-original');
