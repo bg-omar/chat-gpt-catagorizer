@@ -8,8 +8,10 @@ let isSortListsEnabled = false;
 sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false));
 
 let dataTotal = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
+let cursorTotal = 10;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
+let cursorOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
@@ -24,6 +26,51 @@ const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
 // Function to dynamically load KaTeX CSS and JS
+
+(function () {
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const [resource, config] = args;
+        const response = await originalFetch(...args);
+
+        // Capture API calls for project conversations
+        if (typeof resource === "string" && resource.includes("/backend-api/gizmos/")) {
+            const match = resource.match(/g-p-[a-f0-9]+/); // Extract project ID dynamically
+            const cursorMatch = resource.match(/cursor=(\d+)/);
+            const cursor = cursorMatch ? parseInt(cursorMatch[1], 10) : 0; // Detect cursor
+
+            if (match) {
+                const projectId = match[0]; // Extract project identifier (g-p-XXXXXXXXXX)
+                console.log(`📥 Fetching conversations for project: ${projectId}, cursor: ${cursor}`);
+
+                const clonedResponse = response.clone();
+                const data = await clonedResponse.json();
+
+                // Store total conversations count
+                sessionStorage.setItem("cursorTotal", JSON.stringify(data.cursor));
+
+                // Get existing conversations
+                const existingData = JSON.parse(sessionStorage.getItem(`conversations_${projectId}`)) || [];
+
+                // Process new conversations
+                const newConversations = data.items.map((item) => ({
+                    ...item,
+                    update_time: item.update_time ? new Date(item.update_time) : null,
+                }));
+
+                // Merge & remove duplicates
+                const mergedConversations = mergeAndCleanConversations2(existingData, newConversations);
+
+                // Store merged conversations under project-specific key
+                sessionStorage.setItem(`conversations_${projectId}`, JSON.stringify(mergedConversations));
+                sessionStorage.setItem("cursorOffset", JSON.stringify(cursor + 10)); // Move cursor by 10
+            }
+        }
+
+        return response;
+    };
+})();
+
 
 (function () {
   const originalFetch = window.fetch;
@@ -95,6 +142,7 @@ function repeater() {
       if (isScrollEnabled) {
         if (switcheroo) {
           await triggerScrollAndEvent(300);
+          await triggerScrollAndEvent(300, "project");
         } else {
           await triggerScrollAndEvent();
         }
@@ -127,6 +175,7 @@ function repeater() {
         if (isScrollEnabled) {
           if (switcheroo) {
             await triggerScrollAndEvent(300);
+            await triggerScrollAndEvent(300, "project");
           } else {
             await triggerScrollAndEvent();
           }
@@ -350,11 +399,20 @@ function setStates() {
         console.log('Finished set states');
 }
 
-function triggerScrollAndEvent(amount = 0) {
-  // Find the scrolling container
-  const scrollContainer = document.querySelector(
-      '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
-  );
+function triggerScrollAndEvent(amount = 0, loc = "nav") {
+   let scrollContainer;
+  if (loc === "nav"){
+    // Find the scrolling container
+    scrollContainer = document.querySelector(
+        '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
+    );
+  } else {
+    // Find the scrolling container
+     scrollContainer = document.querySelector(
+      'div.relative.flex.h-full.w-full.flex-row.overflow-hidden,' + 'div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden'
+  
+    );
+  }
 
   if (!scrollContainer) {
     console.error('Scrolling container not found.');
@@ -451,59 +509,7 @@ function checkAndReplaceText() {
   if (divElements.length === 0) return;
 
   const colors = [
-    '#f0f',
-    '#FF7E00',
-    '#64edd3',
-    '#0f0',
-    '#3cc',
-    '#ff0',
-    '#f00',
-    '#0ff',
-    '#336699',
-    'gray',
-    'silver',
-    '#CC99FF',
-    '#6633FF',
-    '#66FF99',
-    '#FF6633',
-    '#66CCCC',
-    '#33CC33',
-    'red',
-    'purple',
-    'green',
-    'lime',
-    'olive',
-    'yellow',
-    'blue',
-    'teal',
-    'aqua',
-    '#FFC0CB',
-    '#8A2BE2',
-    '#5F9EA0',
-    '#7FFF00',
-    '#DC143C',
-    '#00FFFF',
-    '#FFD700',
-    '#ADFF2F',
-    '#4B0082',
-    '#FF4500',
-    '#DA70D6',
-    '#EE82EE',
-    '#20B2AA',
-    '#BA55D3',
-    '#4682B4',
-    '#D2691E',
-    '#40E0D0',
-    '#6A5ACD',
-    '#B22222',
-    '#808000',
-    '#708090',
-    '#8B4513',
-    '#FF1493',
-    '#00FA9A',
-    '#B0C4DE',
-    '#F5DEB3',
-    '#00CED1',
+    '#f0f',    '#FF7E00',    '#64edd3',    '#0f0',    '#3cc',    '#ff0',    '#f00',    '#0ff',    '#336699',    'gray',    'silver',    '#CC99FF',    '#6633FF',    '#66FF99',    '#FF6633',    '#66CCCC',    '#33CC33',    'red',    'purple',    'green',    'lime',    'olive',    'yellow',    'blue',    'teal',    'aqua',    '#FFC0CB',    '#8A2BE2',    '#5F9EA0',    '#7FFF00',    '#DC143C',    '#00FFFF',    '#FFD700',    '#ADFF2F',    '#4B0082',    '#FF4500',    '#DA70D6',    '#EE82EE',    '#20B2AA',    '#BA55D3',    '#4682B4',    '#D2691E',    '#40E0D0',    '#6A5ACD',    '#B22222',    '#808000',    '#708090',    '#8B4513',    '#FF1493',    '#00FA9A',    '#B0C4DE',    '#F5DEB3',    '#00CED1',
   ];
   let colorIndex = 0;
   let wordColors = {};
@@ -845,6 +851,17 @@ function initializeMutationObserver() {
     observer.observe(targetNode, config);
   }
 }
+
+
+
+
+// 🔄 **Merge Conversations & Remove Duplicates**
+function mergeAndCleanConversations2(existingConversations, newConversations) {
+    const seenIds = new Set(existingConversations.map((conv) => conv.id));
+    const filteredNew = newConversations.filter((conv) => !seenIds.has(conv.id));
+    return [...existingConversations, ...filteredNew];
+}
+
 
 function monitorProjectChanges() {
   const projectsContainer = document.querySelector(
