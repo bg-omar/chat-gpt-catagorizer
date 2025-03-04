@@ -1,16 +1,24 @@
 let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || false; // Default state
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
-let isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled')) || true; // Default state
+let isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isNavScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
-sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false)) ;
+sessionStorage.setItem('isSortListsEnabled', JSON.stringify(false));
+let sortListTriggered = false;
+sessionStorage.setItem('sortListsTriggered', JSON.stringify(false));
 
-let dataTotal  = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
+let dataTotal = JSON.parse(sessionStorage.getItem('dataTotal')) || 0;
+let cursorTotal = 10;
 let shouldFetchMore = true; // Initially, allow fetching
 let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
-let switcheroo = false;
+let latexInterval;
+let firstSort;
+let latexAvailable = true;
+let stateSetting = true;
+let projectId = extractProjectId();
+let projectCategorized = false;
 
 const offsetAmount = document.createElement('div');
 const derenderButton = document.createElement('button');
@@ -20,36 +28,6 @@ const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
 // Function to dynamically load KaTeX CSS and JS
 
-(function () {
-  const originalFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const [resource, config] = args;
-
-    const response = await originalFetch(...args);
-
-    // Intercept the API calls for conversations
-    if (typeof resource === "string" && resource.includes("/backend-api/conversations")) {
-      const clonedResponse = response.clone(); // Clone the response to read it without consuming it
-      const data = await clonedResponse.json();
-
-      sessionStorage.setItem('dataTotal', JSON.stringify(data.total)) ; // Default state
-      // Store the API data in localStorage
-      const existingData = JSON.parse(sessionStorage.getItem("conversations")) || [];
-      const newConversations = data.items.map((item) => ({
-        ...item,
-        update_time: item.update_time ? new Date(item.update_time) : null,
-      }));
-
-      const mergedConversations = mergeAndCleanConversations(existingData, newConversations);
-      sessionStorage.setItem("conversations", JSON.stringify(mergedConversations));
-      sessionStorage.setItem("apiOffset", JSON.stringify(apiOffset));
-      // Save the offset to avoid re-fetching the same data
-      apiOffset = data.offset + data.limit;
-    }
-
-    return response;
-  };
-})();
 
 document.addEventListener('DOMContentLoaded', () => {
   initializeButtons();
@@ -60,224 +38,96 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeButtonClickListeners();
 });
 
-function repeater() {
-  const latexInterval = setInterval(async () => {
-    if (!isScriptEnabled) return; // Skip execution if paused
-    try {
-      await toggleLaTeXRendering();
-    } catch (e) {
-      console.error('Error in latex interval:', e);
+// = CONVERSATIONS CAPTURE
+(function () {
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const [resource, config] = args;
+    const response = await originalFetch(...args);
+
+    // Intercept the API calls for conversations
+    if (typeof resource === 'string' && resource.includes('/backend-api/conversations')) {
+      const clonedResponse = response.clone(); // Clone the response to read it without consuming it
+      const data = await clonedResponse.json();
+
+      sessionStorage.setItem('dataTotal', JSON.stringify(data.total)); // Default state
+
+      // Store the API data in localStorage
+      const existingData =  JSON.parse(sessionStorage.getItem('conversations')) || [];
+      const newConversations = data.items.map((item) => ({
+        ...item,
+        update_time: item.update_time ? new Date(item.update_time) : null,
+      }));
+
+      const mergedConversations = mergeAndCleanConversations(
+          existingData,
+          newConversations
+      );
+
+      sessionStorage.setItem('conversations',  JSON.stringify(mergedConversations));
+
+      // Save the offset to avoid re-fetching the same data
+      apiOffset = data.offset + data.limit;
+      sessionStorage.setItem('apiOffset', JSON.stringify(apiOffset));
     }
-  }, 100);
 
-  const firstSort = setInterval(async () => {
-    if (isPaused) return; // Skip execution if paused
+    return response;
+  };
+})();
 
-    try {
-      await getStates();
-      if (isScrollEnabled) {
-        if (switcheroo) {
-          await triggerScrollAndEvent(300);
-        } else {
-          await triggerScrollAndEvent();
-        }
-      }
-      if (isScriptEnabled) {
-        await checkAndReplaceText();
-      }
+// = PROJECTS CAPTURE
+(function () {
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const [resource, config] = args;
+    const response = await originalFetch(...args);
 
-      if (isSortListsEnabled) {
-        await sortLists();
-        await validateListItems();
+    // Capture API calls for project conversations
+    if (typeof resource === "string" && resource.includes("/backend-api/gizmos/")) {
+      const match = resource.match(/g-p-[a-f0-9]+/); // Extract project ID dynamically
+      const cursorMatch = resource.match(/cursor=(\d+)/);
+      const cursor = cursorMatch ? parseInt(cursorMatch[1], 10) : 0; // Detect cursor
+
+      if (match) {
+        projectId = match[0]; // Extract project identifier (g-p-XXXXXXXXXX)
+
+        const clonedResponse = response.clone();
+        const data = await clonedResponse.json();
+
+        // Store total conversations count
+        sessionStorage.setItem(`cursor`, JSON.stringify(data.cursor));
+
+        // Get existing conversations
+        const existingData = JSON.parse(sessionStorage.getItem(`conversations_${projectId}`)) || [];
+
+        // Process new conversations
+        const newConversations = data.items.map((item) => ({
+          ...item,
+          update_time: item.update_time ? new Date(item.update_time) : null,
+        }));
+
+        // Merge & remove duplicates
+        const mergedConversations = mergeAndCleanConversations2(existingData, newConversations);
+
+        // Store merged conversations under project-specific key
+        sessionStorage.setItem(`conversations_${projectId}`, JSON.stringify(mergedConversations));
       }
-      switcheroo = !switcheroo;
-      await setStates();
-    } catch (e) {
-      console.error('Error in sortLists interval:', e);
     }
-  }, 5000);
 
-  if (apiOffset > dataTotal) {
-    clearInterval(firstSort);
-    setInterval(async () => {
-      if (isPaused) return; // Skip execution if paused
-      let switcheroo = false;
-      try {
-        await getStates();
-        if (isScrollEnabled) {
-          if (switcheroo) {
-            await triggerScrollAndEvent(300);
-          } else {
-            await triggerScrollAndEvent();
-          }
-        }
-        if (isScriptEnabled) {
-          await checkAndReplaceText();
-        }
-        if (isScrollEnabled) {
-          await triggerScrollAndEvent();
-        }
-        if (isSortListsEnabled) {
-          await sortLists();
-          await validateListItems();
-        }
-        switcheroo = !switcheroo;
-        await setStates();
-      } catch (e) {
-        console.error(
-            'Error in checkAndReplaceText interval after timeout:',
-            e
-        );
-      }
-    }, 90000);
-  }
-}
-function toggleLaTeXRendering() {
-  if (renderLatexEnabled) {
-    renderLaTeX();
-  } else {
-    derenderLaTeX();
-  }
-}
-
-function initializeButtons() {
-  derenderButton.style.cssText = getButtonStyles();
-  derenderButton.textContent = `LaTeX: ${renderLatexEnabled ? 'on' : 'off'}`;
-  derenderButton.addEventListener('click', () => toggleState('renderLatexEnabled', derenderButton));
-
-  // Create container for the buttonsD
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.cssText = `
-    position: fixed;
-    bottom: 50%;
-    right: 40px;
-    display: grid;
-    gap: 10px;
-  `;
-
-  offsetAmount.style.cssText = getButtonStyles();
-  offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
-
-  pauseButton.style.cssText = getButtonStyles();
-  pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
-  pauseButton.addEventListener('click', () => togglePause(pauseButton));
-
-  scriptButton.style.cssText = getButtonStyles();
-  scriptButton.textContent = `Script: ${isScriptEnabled}`;
-  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
-
-  scrollButton.style.cssText = getButtonStyles();
-  scrollButton.textContent = `Scroll: ${isScrollEnabled}`;
-  scrollButton.addEventListener('click', () => toggleState('isScrollEnabled', scrollButton));
-
-
-  sortListsButton.style.cssText = getButtonStyles();
-  sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
-  sortListsButton.addEventListener('click', () => toggleState('isSortListsEnabled', sortListsButton));
-
-  // Append buttons to the container
-  buttonContainer.appendChild(derenderButton);
-  buttonContainer.appendChild(offsetAmount);
-  buttonContainer.appendChild(pauseButton);
-  buttonContainer.appendChild(scriptButton);
-  buttonContainer.appendChild(scrollButton);
-  buttonContainer.appendChild(sortListsButton);
-
-  // Add the container to the document body
-  document.body.appendChild(buttonContainer);
-}
-
-// Function to toggle pause state
-function togglePause(pauseButton) {
-  if (isPaused) {
-    clearInterval(pauseTimeout);
-    isPaused = false;
-    pauseTimeLeft = 30;
-    pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
-
-    // Ensure stored data is refreshed before resuming
-    setTimeout(() => {
-      getStates();  // Refresh session storage values
-      console.log('Session storage refreshed after pause.');
-    }, 500); // Short delay before resuming
-
-    console.log('Repeater unpaused');
-  } else {
-    isPaused = true;
-    pauseButton.disabled = false;
-    pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
-
-    pauseTimeout = setInterval(() => {
-      pauseTimeLeft--;
-      pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
-
-      if (pauseTimeLeft <= 0) {
-        clearInterval(pauseTimeout);
-        isPaused = false;
-        pauseTimeLeft = 30;
-        pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
-
-        setTimeout(() => {
-          getStates(); // Ensure latest data is fetched before resuming
-          console.log('Session storage refreshed after timeout.');
-        }, 500);
-
-        console.log('Repeater resumed');
-      }
-    }, 1000);
-  }
-}
-
-// Function to toggle state and update the button text
-function toggleState(stateKey, button) {
-  const currentState = JSON.parse(sessionStorage.getItem(stateKey));
-  const newState = !currentState;
-
-  if (stateKey === 'renderLatexEnabled') {
-    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
-  } else {
-    // Default behavior for other buttons
-    button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
-  }
-  sessionStorage.setItem(stateKey, JSON.stringify(newState));
-  console.log(`${stateKey}:`, newState);
-}
-
-function formatStateKey(stateKey) {
-  return stateKey
-      .replace(/([A-Z])/g, ' $1')  // Add space before uppercase letters
-      .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '')  // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
-      .trim();  // Remove any leading/trailing spaces
-}
-
-// Function to get button styles
-function getButtonStyles() {
-  return `
-    padding: 10px 10px;
-    background-color: #22002244;
-    color: #ffffff66;
-    border: 1px solid #cccccc66;
-    justify-self: stretch;
-    text-align: center;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 10px;
-    :hover {
-        color: #fff;
-        background-color: #202;
-        border: 1px solid #ccc;
-    }
-  `;
-}
+    return response;
+  };
+})();
 
 function getStates() {
   try {
     isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
-    isScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
+    isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled'));
+    sortListTriggered = JSON.parse(sessionStorage.getItem('sortListsTriggered'));
     renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled'));
     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
     dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
+    cursorTotal = JSON.parse(sessionStorage.getItem(`cursor`));
 
     // Force refresh of conversation data to avoid stale IDs
     let updatedConversations = managesessionStorage('get') || [];
@@ -286,108 +136,109 @@ function getStates() {
     offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
 
     if (apiOffset >= dataTotal) {
-      if (isScrollEnabled) {
         isSortListsEnabled = true;
-      }
-      isScrollEnabled = false;
+        sessionStorage.setItem('isSortListsEnabled', JSON.stringify(true));
     }
+    //console.log('Finished get states');
   } catch (error) {
     console.error('Error in getStates:', error);
   }
 }
 
-
 function setStates() {
   sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
-  sessionStorage.setItem('isScrollEnabled', JSON.stringify(isScrollEnabled));
-  sessionStorage.setItem('isSortListsEnabled', JSON.stringify(isSortListsEnabled));
-  sessionStorage.setItem('renderLatexEnabled', JSON.stringify(renderLatexEnabled));
+  sessionStorage.setItem('isNavScrollEnabled', JSON.stringify(isNavScrollEnabled));
+  sessionStorage.setItem('isSortListsEnabled',JSON.stringify(isSortListsEnabled));
+  sessionStorage.setItem('renderLatexEnabled',JSON.stringify(renderLatexEnabled));
+
+  // Update the button text to match the state
+  sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
+  //console.log('Finished set states');
 }
 
-function triggerScrollAndEvent(amount = 0) {
-  // Find the scrolling container
-  const scrollContainer = document.querySelector(
-      '.flex-col.flex-1.transition-opacity.duration-500.relative.-mr-2.pr-2.overflow-y-auto'
-  );
+// = REPEATER
+function repeater() {
+  if (latexAvailable) {
+    latexInterval = setInterval(async () => {
+      if (!isScriptEnabled) return;
+      try {
+        await toggleLaTeXRendering();
+      } catch (e) {
+        console.error('Error in latex interval:', e);
+      }
+    }, 100);
+  }
 
-  if (!scrollContainer) {
-    console.error('Scrolling container not found.');
-    return;
-  }
-  // Check if the container can scroll further
-  if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-    // If at the bottom, scroll back to the top
-    scrollContainer.scrollTop = 0;
-    // Dispatch the scroll event to trigger the website's fetching logic
-    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-    console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
-  }
-  else if (amount === 0) {
-    scrollContainer.scrollTop = 0;
-  } else {
-    // Otherwise, scroll down by a fixed amount
-    scrollContainer.scrollTop += scrollContainer.scrollHeight - 10 - amount; // Scroll down by 300px (adjust as needed)
-  }
-  // Dispatch the scroll event to trigger the website's fetching logic
-  scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
-  console.log(scrollContainer.scrollTop, scrollContainer.scrollHeight)
+  firstSort = setInterval(async () => {
+    if (isPaused) return; // Skip execution if paused
+    try {
+      await getStates();
 
-  if (apiOffset >= dataTotal) {
-    isScrollEnabled = false;
-    isSortListsEnabled = true;
-    setStates();
+      if (apiOffset <= dataTotal) {
+          await scrollAndEvent();
+      }
+
+      if(cursorTotal !== null) {
+          await scrollAndEvent('project');
+      } else {
+        await sortProject();
+      }
+
+      if (isScriptEnabled) {
+        await checkAndReplaceText();
+      }
+
+      // Only sort if sorting is enabled and hasn't been triggered recently
+      if (isSortListsEnabled && !sortListTriggered) {
+        console.log('Triggering sortLists() due to sessionStorage change.');
+        await sortLists();
+        await validateListItems();
+        sessionStorage.setItem('sortListsTriggered', JSON.stringify(true)); // Prevent repeated execution
+      }
+
+      setStates(); // Set states after changes
+    } catch (e) {
+      console.error('Error in sortLists interval:', e);
+    }
+  }, 2500); // Reduce interval if needed
+
+  if (apiOffset > dataTotal && cursorTotal === null) {
+    clearInterval(firstSort);
+    console.log('Start 2nd interval');
+    setInterval(async () => {
+      if (isPaused) return;
+      try {
+        await getStates();
+
+        if (apiOffset <= dataTotal) {
+            await scrollAndEvent();
+        }
+
+        if(cursorTotal !== null) {
+          await scrollAndEvent('project');
+        } else {
+          await sortProject();
+        }
+
+        if (isScriptEnabled) {
+          await checkAndReplaceText();
+        }
+
+        if (isSortListsEnabled && !sortListTriggered) {
+          console.log('Triggering sortLists() due to sessionStorage change.');
+          await sortLists();
+          sessionStorage.setItem('sortListsTriggered', JSON.stringify(true));
+        }
+
+        setStates();
+      } catch (e) {
+        console.error('Error in checkAndReplaceText interval after timeout:', e);
+      }
+    }, 90000);
   }
 }
 
-function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
-  const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5');
-  if (container) {
-    console.log('Container loaded.');
-    callback();
-  } else if (retryCount < maxRetries) {
-    console.log('Waiting for container...');
-    setTimeout(() => waitForContainerToLoad(callback, maxRetries, retryCount + 1), 100);
-  } else {
-    console.error('Max retries reached. Container not found.');
-  }
-}
-
-function createListItem(conversation, index) {
-  const li = document.createElement('li');
-  li.className = "relative";
-  li.setAttribute("data-testid", `history-item-${index}`);
-  li.setAttribute("data-date", conversation.update_time);
-  li.setAttribute("data-id", conversation.id);
-
-  li.innerHTML = `
-    <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: #171717;">
-      <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
-        <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
-          ${conversation.title}
-        </div>
-      </a>
-      <div class="absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 hidden can-hover:group-hover:flex">
-        <span data-state="closed">
-          <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${index}-options" type="button" id="radix-${index}" aria-haspopup="menu" aria-expanded="true" data-state="open" aria-controls="radix-${index}">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
-              <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
-            </svg>
-          </button>
-        </span>
-      </div>
-    </div>
-  `;
-
-  return li;
-}
-
-function processOrphans(conversations, olElement) {
-  conversations.forEach((conversation, index) => {
-    const li = createListItem(conversation, index);
-    olElement.appendChild(li);
-  });
-}
-
+// = REPLACE TEXT COLOR CATEGORIES
 function checkAndReplaceText() {
   // Select both existing elements and the new OL path you want to include
   const divElements = document.querySelectorAll(
@@ -398,22 +249,22 @@ function checkAndReplaceText() {
   if (divElements.length === 0) return;
 
   const colors = [
-    '#f0f', '#FF7E00', '#64edd3', '#0f0', '#3cc', '#ff0', '#f00', '#0ff',
-    '#336699', 'gray', 'silver', '#CC99FF', '#6633FF', '#66FF99', '#FF6633',
-    '#66CCCC', '#33CC33', 'red', 'purple', 'green', 'lime', 'olive', 'yellow',
-    'blue', 'teal', 'aqua', '#FFC0CB', '#8A2BE2', '#5F9EA0', '#7FFF00',
-    '#DC143C', '#00FFFF', '#FFD700', '#ADFF2F', '#4B0082', '#FF4500',
-    '#DA70D6', '#EE82EE', '#20B2AA', '#BA55D3', '#4682B4', '#D2691E',
-    '#40E0D0', '#6A5ACD', '#B22222', '#808000', '#708090', '#8B4513',
-    '#FF1493', '#00FA9A', '#B0C4DE', '#F5DEB3', '#00CED1'
+    '#f0f',    '#FF7E00',    '#64edd3',    '#0f0',    '#3cc',    '#ff0',    '#f00',    '#0ff',    '#336699',    'gray',    'silver',    '#CC99FF',    '#6633FF',    '#66FF99',    '#FF6633',    '#66CCCC',    '#33CC33',    'red',    'purple',    'green',    'lime',    'olive',    'yellow',    'blue',    'teal',    'aqua',    '#FFC0CB',    '#8A2BE2',    '#5F9EA0',    '#7FFF00',    '#DC143C',    '#00FFFF',    '#FFD700',    '#ADFF2F',    '#4B0082',    '#FF4500',    '#DA70D6',    '#EE82EE',    '#20B2AA',    '#BA55D3',    '#4682B4',    '#D2691E',    '#40E0D0',    '#6A5ACD',    '#B22222',    '#808000',    '#708090',    '#8B4513',    '#FF1493',    '#00FA9A',    '#B0C4DE',    '#F5DEB3',    '#00CED1',
   ];
+
+  const projectId = extractProjectId();
   let colorIndex = 0;
   let wordColors = {};
   let conversations;
-
+  let storedProjectConversations;
+  let projectConversations;
   try {
     wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
     conversations = managesessionStorage('get') || {};
+    storedProjectConversations = JSON.parse(sessionStorage.getItem("conversations_" + projectId)) || {};
+    projectConversations = Array.isArray(storedProjectConversations)
+        ? storedProjectConversations
+        : Array.from(storedProjectConversations);
   } catch (e) {
     console.error('Error parsing wordColors from sessionStorage:', e);
     wordColors = {};
@@ -427,6 +278,16 @@ function checkAndReplaceText() {
         divElement.closest('li')?.setAttribute('data-id', item.id);
       }
     });
+
+
+    if (projectId !== null) {
+      projectConversations.forEach((item) => {
+        if (item.title === textContent) {
+          divElement.closest('li')?.setAttribute('data-date', item.update_time);
+          divElement.closest('li')?.setAttribute('data-id', item.id);
+        }
+      });
+    }
 
     if (divElement.querySelector('span')) return;
 
@@ -456,50 +317,17 @@ function checkAndReplaceText() {
   }
 }
 
-function collectSingleItems(categories, singleItems, fragment) {
-  if(!isSortListsEnabled) return;
-  // Separate out single-item categories
-  const sortedCategories = [];
-  for (const category in categories) {
-    if (categories[category].length === 1) {
-      singleItems.push(...categories[category]);
-    } else {
-      const mostRecentDate = categories[category]
-          .filter((item) => item.date instanceof Date && !isNaN(item.date))
-          .reduce(
-              (mostRecent, current) =>
-                  !mostRecent || current.date > mostRecent
-                      ? current.date
-                      : mostRecent,
-              null
-          );
-
-      //console.log('Most Recent Date for category:', category, mostRecentDate);
-      sortedCategories.push({
-        category,
-        items: categories[category].map((itemObj) => itemObj.item),
-        mostRecentDate: mostRecentDate, // Now reflects the most recent date
-      });
-    }
-  }
-
-  // Create a "Single Items" section for all single-item categories
-  if (singleItems.length > 0) {
-    const singleItemsOlContainer = createCategoryContainer(
-        'Single Items',
-        singleItems.map((itemObj) => itemObj.item)
-    );
-    fragment.appendChild(singleItemsOlContainer);
-  }
-  return sortedCategories;
-}
-
+// = SORT LIST ITEMS
 function sortLists() {
   const categories = {};
   const uncategorizedItems = [];
   const singleItems = []; // To collect single item categories
-  const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
+  const listContainer = document.querySelector('div.flex.flex-col.gap-2.text-token-text-primary.text-sm');
+
   if (!listContainer) return;
+
+
+  console.log('Sorting Started');
 
   const originalOlLists = listContainer.querySelectorAll('ol');
   const olListsToCategorize = Array.from(originalOlLists);
@@ -508,11 +336,14 @@ function sortLists() {
   let processedItems = new Set();
   let wordColors = {};
   let conversations;
+  let getConversations;
 
   try {
     wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
     getConversations = managesessionStorage('get') || {};
-    conversations = Array.from(getConversations);
+    conversations = Array.isArray(getConversations)
+        ? getConversations
+        : Array.from(getConversations);
   } catch (e) {
     console.error('Error parsing wordColors from sessionStorage:', e);
   }
@@ -542,18 +373,19 @@ function sortLists() {
         // console.log("conversation removed: ", conversations.length, dataId);
       }
       // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
-      const fallbackDate = (date2 !== undefined) ? date2 : new Date(0); // Epoch time for missing dates
-      const date = (date2 !== undefined)
-          ? date2
-          : dateStr
-              ? new Date(dateStr)
-              : fallbackDate;
+      const fallbackDate = date2 !== undefined ? date2 : new Date(0); // Epoch time for missing dates
+      const date =
+          date2 !== undefined
+              ? date2
+              : dateStr
+                  ? new Date(dateStr)
+                  : fallbackDate;
       // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
       if (category) {
         if (!categories[category]) categories[category] = [];
-        categories[category].push({item, date});
+        categories[category].push({ item, date });
       } else {
-        uncategorizedItems.push({item, date});
+        uncategorizedItems.push({ item, date });
       }
       // console.log("processedItems added: ", item);
       processedItems.add(item);
@@ -612,7 +444,11 @@ function sortLists() {
     );
     fragment.appendChild(uncategorizedOlContainer);
   }
-  const sortedCategories = collectSingleItems(categories, singleItems, fragment);
+  const sortedCategories = collectSingleItems(
+      categories,
+      singleItems,
+      fragment
+  );
 
   // Sort categories by the earliest date among their items (ascending order)
   sortedCategories.sort((a, b) => {
@@ -626,7 +462,7 @@ function sortLists() {
   // Clear and sort the fragment
 
   // Create categorized lists based on sorted categories and append them in order
-  sortedCategories.forEach(({category, items}) => {
+  sortedCategories.forEach(({ category, items }) => {
     const newOlContainer = createCategoryContainer(
         category,
         items,
@@ -646,8 +482,285 @@ function sortLists() {
   // Reinitialize button listeners and dropdowns after sorting
   reinitializeDropdowns();
   initializeButtonClickListeners();
+}
+
+// = SORT PROJECT ITEMS
+function sortProject() {
+  const projectContainer = document.querySelector("div.mb-14.mt-6");
+  if (!projectContainer) return;
+
+  if (cursorTotal !== null || projectCategorized) {
+    return;
+  }
+
+  const projectId = extractProjectId() || null;
+  console.log("%c Project Sorting Started", "color:#f0f;");
+
+  const projectCategories = {}; // Store categorized items
+  const existingCategories = new Set(); // Track categories that have at least one item
+  const uncategorizedProjectItems = [];
+  const processedItems = new Set();
+
+  let wordColors = {};
+  let conversations = [];
+
+  // Fetch stored color associations & conversations
+  let storedProjectConversations;
+  try {
+    wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
+    storedProjectConversations = JSON.parse(sessionStorage.getItem("conversations_" + projectId)) || {};
+    conversations = Array.isArray(storedProjectConversations)
+        ? storedProjectConversations
+        : Array.from(storedProjectConversations);
+  } catch (e) {
+    console.error("Error retrieving session data:", e);
+  }
+
+  // Collect all list items from <ol> elements inside the container
+  const listItems = Array.from(projectContainer.querySelectorAll("ol li"));
+
+  listItems.forEach((item) => {
+    if (processedItems.has(item)) return;
+
+    const category = item.getAttribute("data-category");
+    const dataId = item.getAttribute("data-id");
+    let dateStr = item.getAttribute("data-date");
+    let date2;
+
+    // Find conversation date from stored session data
+    conversations.forEach((conv) => {
+      if (dataId === conv.id) {
+        date2 = new Date(conv.update_time);
+      }
+    });
+
+    const date = date2 || (dateStr ? new Date(dateStr) : new Date(0)); // Default to Epoch if no date
+
+    if (category) {
+      if (!projectCategories[category]) projectCategories[category] = [];
+      projectCategories[category].push({ item, date });
+
+      existingCategories.add(category); // Track that this category has items
+    } else {
+      uncategorizedProjectItems.push({ item, date });
+    }
+
+    processedItems.add(item);
+  });
+
+  // Sort categorized items by date (most recent first)
+  for (const category in projectCategories) {
+    projectCategories[category].sort((a, b) => b.date - a.date);
+  }
+
+  // Remove duplicate uncategorized items
+  const uniqueUncategorizedItems = [];
+  const seenIds = new Set();
+
+  uncategorizedProjectItems.forEach(({ item, date }) => {
+    const itemId = item.getAttribute("data-id");
+    if (!seenIds.has(itemId)) {
+      seenIds.add(itemId);
+      uniqueUncategorizedItems.push({ item, date });
+    }
+  });
+
+  // Sort uncategorized items by date (most recent first)
+  uniqueUncategorizedItems.sort((a, b) => b.date - a.date);
+
+  // Create a document fragment for optimized DOM manipulation
+  const fragment = document.createDocumentFragment();
+
+  // Handle Categorized Items First (Uncategorized is NOT added here)
+  const sortedCategories = Object.entries(projectCategories)
+      .filter(([category, _]) => existingCategories.has(category)) // Only keep non-empty categories
+      .map(([category, items]) => ({
+        category,
+        items,
+        mostRecentDate: items.length ? items[0].date : new Date(0),
+      }))
+      .sort((a, b) => b.mostRecentDate - a.mostRecentDate);
+
+  sortedCategories.forEach(({ category, items }) => {
+    const newOlContainer = createCategoryContainer(
+        category,
+        items.map(({ item }) => item),
+        wordColors[category]
+    );
+    fragment.appendChild(newOlContainer);
+  });
+
+  // Now append "Uncategorized" at the end
+  if (uniqueUncategorizedItems.length > 0) {
+    const uncategorizedOlContainer = createCategoryContainer(
+        "Uncategorized",
+        uniqueUncategorizedItems.map(({ item }) => item)
+    );
+    fragment.appendChild(uncategorizedOlContainer);
+  }
+
+  // Remove old <ol> elements
+  projectContainer.querySelectorAll("ol").forEach((ol) => ol.remove());
+
+  // Append newly sorted content
+  projectContainer.appendChild(fragment);
+
+  // Reinitialize UI interactions
+  reinitializeDropdowns();
+  initializeButtonClickListeners();
+  projectCategorized = true;
+}
+function toggleLaTeXRendering() {
+  if (renderLatexEnabled) {
+    renderLaTeX();
+  } else {
+    const hasLatex = document.querySelector('[data-original]') !== null;
+    if (hasLatex) {
+      derenderLaTeX();
+      latexAvailable = true;
+    } else {
+      console.log('No LaTeX to de-render.');
+      clearInterval(latexInterval); // Stop the interval if there's no LaTeX left
+      latexAvailable = false;
+    }
+  }
+}
+
+function scrollAndEvent(container = 'nav') {
+
+  // Find the scrolling container
+  let scrollContainer;
+  if(container !== 'nav') {
+    scrollContainer = document.querySelector(
+        '.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div > section > div:nth-child(2) > div > div'
+    );
+  } else {
+    scrollContainer = document.querySelector(
+        '.flex-col.flex-1.transition-opacity.duration-500.relative.pr-3.overflow-y-auto'
+    );
+  }
+
+  if (!scrollContainer) {
+    console.error('Scrolling container not found.');
+    return;
+  }
+  // Check if the container can scroll further
+
+  if(container !== 'nav' && cursorTotal === null) {
+    scrollContainer.scrollTop = 0;
+  } else if (apiOffset >= dataTotal) {
+    scrollContainer.scrollTop = 0;
+  }
 
 
+  if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
+    scrollContainer.scrollTop = scrollContainer.scrollHeight - 200;
+    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+  }
+
+  scrollContainer.scrollTop += scrollContainer.scrollHeight - 300;
+
+
+  // Dispatch the scroll event to trigger the website's fetching logic
+  scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+  if (apiOffset >= dataTotal) {
+    isNavScrollEnabled = false;
+    isSortListsEnabled = true;
+    setStates();
+  }
+}
+
+function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
+  const container = document.querySelector(
+      '.relative.mt-5.first\\:mt-0.last\\:mb-5'
+  );
+  if (container) {
+    console.log('Container loaded.');
+    callback();
+  } else if (retryCount < maxRetries) {
+    console.log('Waiting for container...');
+    setTimeout(
+        () => waitForContainerToLoad(callback, maxRetries, retryCount + 1),
+        100
+    );
+  } else {
+    console.error('Max retries reached. Container not found.');
+  }
+}
+
+function createListItem(conversation, index) {
+  const li = document.createElement('li');
+  li.className = 'relative';
+  li.setAttribute('data-testid', `history-item-${index}`);
+  li.setAttribute('data-date', conversation.update_time);
+  li.setAttribute('data-id', conversation.id);
+
+  li.innerHTML = `
+    <div draggable="true" class="no-draggable group rounded-lg active:opacity-90 bg-[var(--item-background-color)] h-9 text-sm relative" style="--item-background-color: #171717;">
+      <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
+        <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
+          ${conversation.title}
+        </div>
+      </a>
+      <div class="absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 hidden can-hover:group-hover:flex">
+        <span data-state="closed">
+          <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${index}-options" type="button" id="radix-${index}" aria-haspopup="menu" aria-expanded="true" data-state="open" aria-controls="radix-${index}">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
+            </svg>
+          </button>
+        </span>
+      </div>
+    </div>
+  `;
+
+  return li;
+}
+
+function processOrphans(conversations, olElement) {
+  conversations.forEach((conversation, index) => {
+    const li = createListItem(conversation, index);
+    olElement.appendChild(li);
+  });
+}
+
+function collectSingleItems(categories, singleItems, fragment) {
+  if (!isSortListsEnabled) return;
+  // Separate out single-item categories
+  const sortedCategories = [];
+  for (const category in categories) {
+    if (categories[category].length === 1) {
+      singleItems.push(...categories[category]);
+    } else {
+      const mostRecentDate = categories[category]
+          .filter((item) => item.date instanceof Date && !isNaN(item.date))
+          .reduce(
+              (mostRecent, current) =>
+                  !mostRecent || current.date > mostRecent
+                      ? current.date
+                      : mostRecent,
+              null
+          );
+
+      //console.log('Most Recent Date for category:', category, mostRecentDate);
+      sortedCategories.push({
+        category,
+        items: categories[category].map((itemObj) => itemObj.item),
+        mostRecentDate: mostRecentDate, // Now reflects the most recent date
+      });
+    }
+  }
+
+  // Create a "Single Items" section for all single-item categories
+  if (singleItems.length > 0) {
+    const singleItemsOlContainer = createCategoryContainer(
+        'Single Items',
+        singleItems.map((itemObj) => itemObj.item)
+    );
+    fragment.appendChild(singleItemsOlContainer);
+  }
+  return sortedCategories;
 }
 
 function createCategoryContainer(category, items, color) {
@@ -709,7 +822,7 @@ function initializeMutationObserver() {
       '.relative.grow.overflow-hidden.whitespace-nowrap'
   );
 
-  const config = {childList: true, subtree: true, characterData: true};
+  const config = { childList: true, subtree: true, characterData: true };
 
   const callback = (mutationsList) => {
     // Use a flag to prevent recursive triggering of the observer
@@ -743,8 +856,38 @@ function initializeMutationObserver() {
   }
 }
 
+// 🔄 **Merge Conversations & Remove Duplicates**
+function mergeAndCleanConversations2(existingConversations, newConversations) {
+  const seenIds = new Set(existingConversations.map((conv) => conv.id));
+  const filteredNew = newConversations.filter((conv) => !seenIds.has(conv.id));
+  return [...existingConversations, ...filteredNew];
+}
+
+// 🔄 **Merge Conversations, Remove Duplicates, and Handle Renames**
+function mergeAndCleanConversations(existingConversations, newConversations) {
+  const conversationMap = new Map(existingConversations.map(conv => [conv.id, conv]));
+
+  newConversations.forEach((conv) => {
+    if (conversationMap.has(conv.id)) {
+      // Update title if it has changed
+      const existingConv = conversationMap.get(conv.id);
+      if (existingConv.title !== conv.title) {
+        console.log(`Updating title for ${conv.id}: "${existingConv.title}" -> "${conv.title}"`);
+        existingConv.title = conv.title;
+        existingConv.update_time = conv.update_time; // Keep latest timestamp
+      }
+    } else {
+      conversationMap.set(conv.id, conv);
+    }
+  });
+
+  return Array.from(conversationMap.values());
+}
+
 function monitorProjectChanges() {
-  const projectsContainer = document.querySelector('.projects-container-selector'); // Update the selector to match your Projects container
+  const projectsContainer = document.querySelector(
+      '.projects-container-selector'
+  ); // Update the selector to match your Projects container
 
   if (!projectsContainer) {
     console.error('Projects container not found.');
@@ -764,7 +907,10 @@ function monitorProjectChanges() {
         });
       }
 
-      if (mutation.type === 'attributes' && mutation.attributeName === 'data-project-id') {
+      if (
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'data-project-id'
+      ) {
         console.log('Project attributes changed:', mutation.target);
         notifyScriptOfChange(mutation.target);
       }
@@ -817,7 +963,6 @@ function renameChatHandler(mutation) {
   }
 }
 
-
 function reinitializeDropdowns() {
   document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
     // Custom initialization or reattachment logic as needed by the dropdown library
@@ -834,6 +979,145 @@ function reinitializeDropdowns() {
   });
 }
 
+function initializeButtons() {
+  derenderButton.style.cssText = getButtonStyles();
+  derenderButton.textContent = `LaTeX: ${renderLatexEnabled ? 'on' : 'off'}`;
+  derenderButton.addEventListener('click', () =>{
+        toggleState('renderLatexEnabled', derenderButton);
+        latexAvailable = true;
+      }
+  );
+
+  // Create container for the buttonsD
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    position: fixed;
+    bottom: 50%;
+    right: 40px;
+    display: grid;
+    gap: 10px;
+  `;
+
+  offsetAmount.style.cssText = getButtonStyles();
+  offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
+
+  pauseButton.style.cssText = getButtonStyles();
+  pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
+  pauseButton.addEventListener('click', () => togglePause(pauseButton));
+
+  scriptButton.style.cssText = getButtonStyles();
+  scriptButton.textContent = `Script: ${isScriptEnabled}`;
+  scriptButton.addEventListener('click', () =>
+      toggleState('isScriptEnabled', scriptButton)
+  );
+
+  scrollButton.style.cssText = getButtonStyles();
+  scrollButton.textContent = `Scroll: ${isNavScrollEnabled}`;
+  scrollButton.addEventListener('click', () =>
+      toggleState('isNavScrollEnabled', scrollButton)
+  );
+
+  sortListsButton.style.cssText = getButtonStyles();
+  sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
+  sortListsButton.addEventListener('click', () =>
+      toggleState('isSortListsEnabled', sortListsButton)
+  );
+
+  // Append buttons to the container
+  buttonContainer.appendChild(derenderButton);
+  buttonContainer.appendChild(offsetAmount);
+  buttonContainer.appendChild(pauseButton);
+  buttonContainer.appendChild(scriptButton);
+  buttonContainer.appendChild(scrollButton);
+  buttonContainer.appendChild(sortListsButton);
+
+  // Add the container to the document body
+  document.body.appendChild(buttonContainer);
+}
+
+// Function to toggle pause state
+function togglePause(pauseButton) {
+  if (isPaused) {
+    clearInterval(pauseTimeout);
+    isPaused = false;
+    pauseTimeLeft = 30;
+    pauseButton.textContent = `Pause (${pauseTimeLeft}s)`;
+
+    // Ensure stored data is refreshed before resuming
+    setTimeout(() => {
+      getStates(); // Refresh session storage values
+      console.log('Session storage refreshed after pause.');
+    }, 500); // Short delay before resuming
+
+    console.log('Repeater unpaused');
+  } else {
+    isPaused = true;
+    pauseButton.disabled = false;
+    pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
+
+    pauseTimeout = setInterval(() => {
+      pauseTimeLeft--;
+      pauseButton.textContent = `Paused (${pauseTimeLeft}s)`;
+
+      if (pauseTimeLeft <= 0) {
+        clearInterval(pauseTimeout);
+        isPaused = false;
+        pauseTimeLeft = 30;
+        pauseButton.textContent = `Repeater (${pauseTimeLeft}s)`;
+
+        setTimeout(() => {
+          getStates(); // Ensure latest data is fetched before resuming
+          console.log('Session storage refreshed after timeout.');
+        }, 500);
+
+        console.log('Repeater resumed');
+      }
+    }, 1000);
+  }
+}
+
+// Function to toggle state and update the button text
+function toggleState(stateKey, button) {
+  const currentState = JSON.parse(sessionStorage.getItem(stateKey));
+  const newState = !currentState;
+
+  if (stateKey === 'renderLatexEnabled') {
+    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
+  } else {
+    // Default behavior for other buttons
+    button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
+  }
+  sessionStorage.setItem(stateKey, JSON.stringify(newState));
+  console.log(`${stateKey}:`, newState);
+}
+
+function formatStateKey(stateKey) {
+  return stateKey
+      .replace(/([A-Z])/g, ' $1') // Add space before uppercase letters
+      .replace(/\bis\b|\bEnabled\b|\bLists?\b/gi, '') // Remove 'is', 'Enabled', 'List' (case-insensitive, supports 'List' & 'Lists')
+      .trim(); // Remove any leading/trailing spaces
+}
+
+// Function to get button styles
+function getButtonStyles() {
+  return `
+    padding: 10px 10px;
+    background-color: #22002244;
+    color: #ffffff66;
+    border: 1px solid #cccccc66;
+    justify-self: stretch;
+    text-align: center;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 10px;
+    :hover {
+        color: #fff;
+        background-color: #202;
+        border: 1px solid #ccc;
+    }
+  `;
+}
+
 // Helper function to manage session storage
 function managesessionStorage(action, conversations = []) {
   const storageKey = 'conversations';
@@ -842,27 +1126,6 @@ function managesessionStorage(action, conversations = []) {
   } else if (action === 'set') {
     sessionStorage.setItem(storageKey, JSON.stringify(conversations));
   }
-}
-
-// Helper function to merge and clean conversations (removes duplicates)
-function mergeAndCleanConversations(existingConversations, newConversations) {
-  const combinedConversations = [...existingConversations, ...newConversations];
-  return removeDuplicates(combinedConversations);
-}
-
-// Helper function to remove duplicates based on the conversation ID
-function removeDuplicates(conversations) {
-  const uniqueConversations = [];
-  const seenIds = new Set();
-
-  conversations.forEach((conversation) => {
-    if (!seenIds.has(conversation.id)) {
-      seenIds.add(conversation.id);
-      uniqueConversations.push(conversation);
-    }
-  });
-
-  return uniqueConversations;
 }
 
 function removeObjectWithId(arr, id) {
@@ -877,7 +1140,9 @@ function validateListItems() {
   listItems.forEach((item) => {
     const button = item.querySelector('button');
     if (!button) {
-      console.error(`List item with ID ${item.getAttribute('data-id')} is missing a button.`);
+      console.error(
+          `List item with ID ${item.getAttribute('data-id')} is missing a button.`
+      );
     }
   });
 }
@@ -895,7 +1160,7 @@ function initializeButtonClickListeners() {
 }
 
 function handleButtonClick(button) {
-  const buttonId = button.id || "No ID";
+  const buttonId = button.id || 'No ID';
   console.log(`Button with ID ${buttonId} was clicked!`);
 
   // Reset the countdown
@@ -906,8 +1171,10 @@ function handleButtonClick(button) {
     togglePause(pauseButton);
   }
 
-  if (buttonId === "No ID") {
-    console.warn("Button clicked without an ID. Ensure all buttons are assigned unique IDs.");
+  if (buttonId === 'No ID') {
+    console.warn(
+        'Button clicked without an ID. Ensure all buttons are assigned unique IDs.'
+    );
   }
 }
 
@@ -917,57 +1184,61 @@ function renderLaTeX() {
   const inlineRegex = /\\\(\s*(.*?)\s*\\\)/g; // Matches \( ... \]
   const doubleDollarRegex = /\$\$\s*(.*?)\s*\$\$/g; // Matches $$ ... $$
 
-  const textNodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const textNodes = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT
+  );
   let node;
 
   while ((node = textNodes.nextNode())) {
     const parent = node.parentNode;
 
     // Skip if already rendered by KaTeX
-    if (parent.tagName === "SPAN" && parent.classList.contains("katex")) continue;
+    if (parent.tagName === 'SPAN' && parent.classList.contains('katex'))
+      continue;
 
     let text = node.nodeValue;
     let updatedText = text;
 
     // Replace LaTeX expressions
     updatedText = updatedText.replace(blockRegex, (_, latex) => {
-      const div = document.createElement("div");
+      const div = document.createElement('div');
       try {
-        div.setAttribute("data-original", `\\[${latex}\\]`); // Store original LaTeX
+        div.setAttribute('data-original', `\\[${latex}\\]`); // Store original LaTeX
         katex.render(latex, div, { displayMode: true });
         return div.outerHTML;
       } catch (error) {
-        console.error("KaTeX Block Render Error:", error, latex);
+        console.error('KaTeX Block Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     updatedText = updatedText.replace(inlineRegex, (_, latex) => {
-      const span = document.createElement("span");
+      const span = document.createElement('span');
       try {
-        span.setAttribute("data-original", `\\(${latex}\\)`); // Store original LaTeX
+        span.setAttribute('data-original', `\\(${latex}\\)`); // Store original LaTeX
         katex.render(latex, span, { displayMode: false });
         return span.outerHTML;
       } catch (error) {
-        console.error("KaTeX Inline Render Error:", error, latex);
+        console.error('KaTeX Inline Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     updatedText = updatedText.replace(doubleDollarRegex, (_, latex) => {
-      const span = document.createElement("span");
+      const span = document.createElement('span');
       try {
-        span.setAttribute("data-original", `$$${latex}$$`); // Store original LaTeX
+        span.setAttribute('data-original', `$$${latex}$$`); // Store original LaTeX
         katex.render(latex, span, { displayMode: false });
         return span.outerHTML;
       } catch (error) {
-        console.error("KaTeX Double Dollar Render Error:", error, latex);
+        console.error('KaTeX Double Dollar Render Error:', error, latex);
         return `Error: ${latex}`;
       }
     });
 
     if (updatedText !== text) {
-      const wrapper = document.createElement("span");
+      const wrapper = document.createElement('span');
       wrapper.innerHTML = updatedText;
       parent.replaceChild(wrapper, node);
     }
@@ -977,6 +1248,11 @@ function renderLaTeX() {
 function derenderLaTeX() {
   // Find all rendered KaTeX elements
   const renderedElements = document.querySelectorAll('[data-original]');
+
+  if (renderedElements.length === 0) {
+    console.log('No LaTeX elements to de-render.'); // Avoid unnecessary logging
+    return;
+  }
 
   renderedElements.forEach((element) => {
     const originalContent = element.getAttribute('data-original');
@@ -988,4 +1264,10 @@ function derenderLaTeX() {
   });
 
   console.log('De-rendered all LaTeX elements.');
+}
+
+function extractProjectId() {
+  const url = window.location.href; // Get current URL from the address bar
+  const match = url.match(/g-p-[a-f0-9]+/);
+  return match ? match[0] : null;
 }

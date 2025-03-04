@@ -15,7 +15,9 @@ html {
 }
 
 ol {
-	transition: height 0.3s ease, opacity 0.3s ease;
+	transition:
+					height 0.3s ease,
+					opacity 0.3s ease;
 	overflow: hidden;
 }
 
@@ -23,14 +25,75 @@ ol {
 	border: 2px dashed #00f;
 }
 
-/* Target the chat container and force it to occupy the full width */
+div.relative.mt-5 {
+	h3 {
+		width: 99% !important;
+		padding: 0.25rem 1rem !important;
+		box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+		line-height: 0.5rem;
+		border: 1px dotted #fff;
+		background-color: #202;
+	}
+}
+body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.flex-col.focus-visible\:outline-0.h-full > div.flex-1.overflow-hidden.\@container\/thread.translate-y-\[2rem\].-mt-\[2rem\].pb-\[1\.5rem\] > div > div > article:nth-child(20) > div > div > div > div > div > div > div > div > div.absolute.bottom-0.right-full.top-0.-mr-3\.5.pr-5.pt-2.\[\.group\/conversation-turn\:hover_\&\]\:flex{
+	display: block;
+}
+h3 {
+	width: 90% !important;
+	padding: 0.5rem 1rem !important;
+	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	border: 1px dotted;
+	line-height: 1rem;
+	background-color: #202;
+}
+
+h4 {
+	color: #64edd3;
+	width: 90% !important;
+	border: 1px dotted #fff;
+	padding: 0.5rem 1rem !important;
+	line-height: 1rem;
+	margin: 0;
+	background-color: #202;
+	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+}
+
+body
+> div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0
+> div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden
+> main
+> div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0
+> div.md\:pt-0.dark\:border-white\/20.md\:border-transparent.md\:dark\:border-transparent.w-full
+> div
+> div.m-auto.text-base.px-3.md\:px-4.w-full.md\:px-5.lg\:px-4.xl\:px-5
+> div {
+	max-width: 95%;
+}
+
+body
+> div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0
+> div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden
+> main
+> div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0
+> div.flex-1.overflow-hidden.\@container\/thread
+> div
+> div
+> div
+> div
+> article:nth-child(2)
+> div
+> div {
+	max-width: 95%;
+}
+
+// Target the chat container and force it to occupy the full width
 .mx-auto,
 .flex,
 .flex-1,
 .gap-4,
 .text-base,
 .md,
-.lg,
+.lg:gap-6,
 .md,
 .lg,
 .xl,
@@ -43,34 +106,14 @@ ol {
 	padding: 0;
 }
 
-h3 {
-	width: 90% !important;
-	padding: .5rem 1rem !important;
-	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-	border: 1px dotted ;
-	line-height: 1rem;
-	background-color: #202;
-}
-
-h4 {
-	color: #64edd3;
-	width: 90% !important;
-	border: 1px dotted #fff;
-	padding: .5rem 1rem !important;
-	line-height: 1rem;
-	margin: 0;
-	background-color: #202;
-	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-}
-
-.max-w-6xl {
+a .max-w-6xl {
 	max-width: 95%;
 }
 
 .prose :where(hr):not(:where(.not-prose)) {
 	border-top-width: 1px;
-	margin-bottom: .25em;
-	margin-top: .25em;
+	margin-bottom: 0.25em;
+	margin-top: 0.25em;
 }
 
 .katex-display {
@@ -79,37 +122,26 @@ h4 {
 	text-align: center;
 }
 
-.copied-message{
+.copied-message {
 	display: none;
-}
-
-div.relative.mt-5 {
-	h3 {
-		width: 90% !important;
-		padding: .25rem 1rem !important;
-		box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-		line-height: .5rem;
-		background-color: #202;
-	}
 }
 
 .flex-row-reverse {
 	flex-direction: row;
 }
 
-
-/* Visible when parent is hovered */
+///* Visible when parent is hovered
 .can-hover\:group-hover\:flex:hover {
 	display: flex !important;
 }
 
-/* Prevent dropdown from hiding when interacting */
+///* Prevent dropdown from hiding when interacting
 .dropdown-menu {
 	pointer-events: auto;
 }
 
 .group:hover .dropdown-menu {
-	display: block; /* Show on hover */
+	display: block; //* Show on hover
 }
 
 .group {
@@ -125,10 +157,10 @@ div.relative.mt-5 {
 }
 
 .group:hover .dropdown-menu {
-	display: block; /* Show on hover */
+	display: block; //* Show on hover
 }
 
-/* Avoid closing when interacting with the dropdown */
+///* Avoid closing when interacting with the dropdown
 .dropdown-menu:hover {
 	display: block;
 }
@@ -153,7 +185,7 @@ div.relative.mt-5 {
 .highlighted {
 	padding: 3px;
 	margin: -7px 0;
-	font-weight: bold !important; /* Optionally make it bold */
+	font-weight: bold !important; ///* Optionally make it bold
 }
 
 .p-2 {
@@ -206,7 +238,7 @@ div.relative.mt-5 {
 
 // Ensure the container always takes 90% of the available width
 .group\/conversation-turn {
-	width: 90%;
+	width: 85%;
 	margin-left: auto;
 	margin-right: auto;
 }
@@ -226,7 +258,7 @@ div.relative.mt-5 {
 
 // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
 .gizmo-bot-avatar {
-	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
+	width: 85%; // Adjust avatar width to 90% of its container (optional, depending on design)
 }
 
 // Any additional rules to override padding/margin if necessary
@@ -234,15 +266,18 @@ div.relative.mt-5 {
 	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
 }
 
-//._main_5jn6z_1 {
-//    width: 90% !important;  // Or any desired width value
-//}
+// ._main_5jn6z_1 {
+//     width: 90% !important;  // Or any desired width value
+// }
 
-.custom-width {
-	width: 90% !important;  // Or any desired value
-}
-
+// .custom-width {
+// 	width: 85% !important;  // Or any desired value
+// }
 
 .mt-5 {
 	margin: 0;
+}
+
+body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.flex-col.focus-visible\:outline-0.h-full > div.flex-1.overflow-hidden.\@container\/thread.translate-y-\[2rem\].-mt-\[2rem\].pb-\[1\.5rem\] > div > div > div > article:nth-child(88) > div > div > div > div > div > div > div > div {
+	max-width: 100%;
 }
