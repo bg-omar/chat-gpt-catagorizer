@@ -1,5 +1,3 @@
-Verified formulas for future derivations, explorations, and inspirations:
-Formula Validated
 $$ \R_e = \frac{\lambda_c}{2 \pi} \alpha $$  
 $$ \R_e = \frac{e^2}{4 \pi \varepsilon_0 M_e c^2} $$  
 $$ \R_e = 2 R_c $$  

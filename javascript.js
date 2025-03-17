@@ -136,8 +136,11 @@ function getStates() {
     offsetAmount.textContent = `${apiOffset} of ${dataTotal}`;
 
     if (apiOffset >= dataTotal) {
+      if (isNavScrollEnabled) {
         isSortListsEnabled = true;
         sessionStorage.setItem('isSortListsEnabled', JSON.stringify(true));
+      }
+      isNavScrollEnabled = false;
     }
     //console.log('Finished get states');
   } catch (error) {
@@ -176,6 +179,8 @@ function repeater() {
 
       if (apiOffset <= dataTotal) {
           await scrollAndEvent();
+      } else {
+        isSortListsEnabled = true;
       }
 
       if(cursorTotal !== null) {
@@ -211,7 +216,9 @@ function repeater() {
         await getStates();
 
         if (apiOffset <= dataTotal) {
-            await scrollAndEvent();
+          await scrollAndEvent();
+        } else {
+          isSortListsEnabled = true;
         }
 
         if(cursorTotal !== null) {
@@ -494,29 +501,23 @@ function sortProject() {
   }
 
   const projectId = extractProjectId() || null;
-  console.log("%c Project Sorting Started", "color:#f0f;");
+  console.log("🚀 Project Sorting Started");
 
-  const projectCategories = {}; // Store categorized items
-  const existingCategories = new Set(); // Track categories that have at least one item
+  const projectCategories = {};
   const uncategorizedProjectItems = [];
   const processedItems = new Set();
 
   let wordColors = {};
   let conversations = [];
 
-  // Fetch stored color associations & conversations
-  let storedProjectConversations;
   try {
     wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
-    storedProjectConversations = JSON.parse(sessionStorage.getItem("conversations_" + projectId)) || {};
-    conversations = Array.isArray(storedProjectConversations)
-        ? storedProjectConversations
-        : Array.from(storedProjectConversations);
+    const storedProjectConversations = JSON.parse(sessionStorage.getItem("conversations_" + projectId)) || [];
+    conversations = Array.isArray(storedProjectConversations) ? storedProjectConversations : Array.from(storedProjectConversations);
   } catch (e) {
     console.error("Error retrieving session data:", e);
   }
 
-  // Collect all list items from <ol> elements inside the container
   const listItems = Array.from(projectContainer.querySelectorAll("ol li"));
 
   listItems.forEach((item) => {
@@ -527,53 +528,32 @@ function sortProject() {
     let dateStr = item.getAttribute("data-date");
     let date2;
 
-    // Find conversation date from stored session data
     conversations.forEach((conv) => {
       if (dataId === conv.id) {
         date2 = new Date(conv.update_time);
       }
     });
 
-    const date = date2 || (dateStr ? new Date(dateStr) : new Date(0)); // Default to Epoch if no date
+    const date = date2 || (dateStr ? new Date(dateStr) : new Date(0));
 
     if (category) {
       if (!projectCategories[category]) projectCategories[category] = [];
-      projectCategories[category].push({ item, date });
+      projectCategories[category].push({ item: item.cloneNode(true), date });
 
-      existingCategories.add(category); // Track that this category has items
     } else {
-      uncategorizedProjectItems.push({ item, date });
+      uncategorizedProjectItems.push({ item: item.cloneNode(true), date });
     }
 
     processedItems.add(item);
   });
 
-  // Sort categorized items by date (most recent first)
-  for (const category in projectCategories) {
-    projectCategories[category].sort((a, b) => b.date - a.date);
-  }
+  console.log("🚀 After Sorting - Categorized:", Object.keys(projectCategories).map(cat => ({ category: cat, count: projectCategories[cat].length })));
+  console.log("🚀 After Sorting - Uncategorized Count:", uncategorizedProjectItems.length);
 
-  // Remove duplicate uncategorized items
-  const uniqueUncategorizedItems = [];
-  const seenIds = new Set();
-
-  uncategorizedProjectItems.forEach(({ item, date }) => {
-    const itemId = item.getAttribute("data-id");
-    if (!seenIds.has(itemId)) {
-      seenIds.add(itemId);
-      uniqueUncategorizedItems.push({ item, date });
-    }
-  });
-
-  // Sort uncategorized items by date (most recent first)
-  uniqueUncategorizedItems.sort((a, b) => b.date - a.date);
-
-  // Create a document fragment for optimized DOM manipulation
   const fragment = document.createDocumentFragment();
 
-  // Handle Categorized Items First (Uncategorized is NOT added here)
   const sortedCategories = Object.entries(projectCategories)
-      .filter(([category, _]) => existingCategories.has(category)) // Only keep non-empty categories
+      .filter(([category, items]) => items.length > 0)
       .map(([category, items]) => ({
         category,
         items,
@@ -581,35 +561,84 @@ function sortProject() {
       }))
       .sort((a, b) => b.mostRecentDate - a.mostRecentDate);
 
+  console.log("🚀 Final Sorted Categories:", sortedCategories);
+
+  projectContainer.querySelectorAll("ol").forEach((ol) => ol.remove());
+
   sortedCategories.forEach(({ category, items }) => {
     const newOlContainer = createCategoryContainer(
         category,
         items.map(({ item }) => item),
         wordColors[category]
     );
+
     fragment.appendChild(newOlContainer);
   });
 
-  // Now append "Uncategorized" at the end
-  if (uniqueUncategorizedItems.length > 0) {
+  if (uncategorizedProjectItems.length > 0) {
     const uncategorizedOlContainer = createCategoryContainer(
         "Uncategorized",
-        uniqueUncategorizedItems.map(({ item }) => item)
+        uncategorizedProjectItems.map(({ item }) => item)
     );
     fragment.appendChild(uncategorizedOlContainer);
   }
 
-  // Remove old <ol> elements
-  projectContainer.querySelectorAll("ol").forEach((ol) => ol.remove());
-
-  // Append newly sorted content
   projectContainer.appendChild(fragment);
+  console.log("🚀 Project categories successfully sorted!");
 
-  // Reinitialize UI interactions
   reinitializeDropdowns();
   initializeButtonClickListeners();
   projectCategorized = true;
 }
+
+function createCategoryContainer(category, items, color) {
+  const newOlContainer = document.createElement('div');
+  newOlContainer.className = 'relative mt-5 first:mt-0 last:mb-5';
+
+  const categoryHeader = document.createElement('h3');
+  categoryHeader.className =
+      'sticky bg-token-sidebar-surface-primary top-0 z-20 flex h-9 items-center px-2 text-xs font-semibold text-ellipsis overflow-hidden break-all pt-3 pb-2 text-token-text-primary';
+  categoryHeader.textContent = `${category}`;
+
+  if (color) {
+    categoryHeader.style.color = color;
+    categoryHeader.style.border = `1px dotted ${color}`;
+  }
+
+  const collapseIcon = document.createElement('span');
+  let isCollapsed = JSON.parse(localStorage.getItem(`categoryState_${category}`)) ?? true;
+  collapseIcon.textContent = isCollapsed ? '[+]' : '[-]';
+  collapseIcon.style.marginRight = '10px';
+  collapseIcon.style.cursor = 'pointer';
+  categoryHeader.prepend(collapseIcon);
+  categoryHeader.style.cursor = 'pointer';
+  newOlContainer.appendChild(categoryHeader);
+
+  const newOl = document.createElement('ol');
+  newOl.style.display = isCollapsed ? 'none' : 'block';
+
+  // 🚨 **Debugging: Log before appending**
+  console.log(`🟢 Attempting to insert ${items.length} items into ${category}`);
+
+  if (items.length === 0) {
+    console.warn(`⚠️ Empty category detected: ${category}`);
+  } else {
+    items.forEach((item) => {
+      console.log(`✅ Appending to ${category}:`, item);
+      newOl.appendChild(item.cloneNode(true)); // Ensure cloning to avoid removal
+    });
+  }
+
+  categoryHeader.addEventListener('click', () => {
+    newOl.style.display = newOl.style.display === 'none' ? 'block' : 'none';
+    collapseIcon.textContent = newOl.style.display === 'none' ? '[+]' : '[-]';
+    localStorage.setItem(`categoryState_${category}`, JSON.stringify(newOl.style.display !== 'none'));
+  });
+
+  newOlContainer.appendChild(newOl);
+  return newOlContainer;
+}
+
 function toggleLaTeXRendering() {
   if (renderLatexEnabled) {
     renderLaTeX();
@@ -644,7 +673,8 @@ function scrollAndEvent(container = 'nav') {
     console.error('Scrolling container not found.');
     return;
   }
-  // Check if the container can scroll further
+
+  //const initialScrollTop = scrollContainer.scrollTop;
 
   if(container !== 'nav' && cursorTotal === null) {
     scrollContainer.scrollTop = 0;
@@ -660,9 +690,11 @@ function scrollAndEvent(container = 'nav') {
 
   scrollContainer.scrollTop += scrollContainer.scrollHeight - 300;
 
-
   // Dispatch the scroll event to trigger the website's fetching logic
   scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+  // Restore the initial scroll position
+  //scrollContainer.scrollTop = initialScrollTop;
 
   if (apiOffset >= dataTotal) {
     isNavScrollEnabled = false;
@@ -761,60 +793,6 @@ function collectSingleItems(categories, singleItems, fragment) {
     fragment.appendChild(singleItemsOlContainer);
   }
   return sortedCategories;
-}
-
-function createCategoryContainer(category, items, color) {
-  const newOlContainer = document.createElement('div');
-  newOlContainer.className = 'relative mt-5 first:mt-0 last:mb-5';
-
-  const categoryHeader = document.createElement('h3');
-  categoryHeader.className =
-      'sticky bg-token-sidebar-surface-primary top-0 z-20 flex h-9 items-center px-2 text-xs font-semibold text-ellipsis overflow-hidden break-all pt-3 pb-2 text-token-text-primary';
-  categoryHeader.textContent = `${category}`;
-
-  if (color) {
-    categoryHeader.style.color = color;
-    categoryHeader.style.border = `1px dotted ${color}`;
-  }
-
-  // Add collapsibility to the category header
-  const collapseIcon = document.createElement('span');
-  let isCollapsed = true;
-  JSON.parse(localStorage.getItem(`categoryState_${category}`)) === undefined
-      ? localStorage.setItem(`categoryState_${category}`, JSON.stringify(true))
-      : (isCollapsed = JSON.parse(
-          localStorage.getItem(`categoryState_${category}`)
-      ));
-  collapseIcon.textContent = isCollapsed ? '[+]' : '[-]';
-  collapseIcon.style.marginRight = '10px';
-  collapseIcon.style.cursor = 'pointer';
-
-  categoryHeader.prepend(collapseIcon);
-  categoryHeader.style.cursor = 'pointer';
-  newOlContainer.appendChild(categoryHeader);
-  const newOl = document.createElement('ol');
-  newOl.style.display = isCollapsed ? 'none' : 'block';
-  items.forEach((item) => {
-    if (document.body.contains(item)) {
-      // Check if item is still in DOM
-      newOl.appendChild(item);
-    }
-  });
-
-  // Toggle collapse/expand on click
-  categoryHeader.addEventListener('click', () => {
-    if (newOl.style.display === 'none') {
-      newOl.style.display = 'block';
-      collapseIcon.textContent = '[-]';
-      localStorage.setItem(`categoryState_${category}`, JSON.stringify(false));
-    } else {
-      newOl.style.display = 'none';
-      collapseIcon.textContent = '[+]';
-      localStorage.setItem(`categoryState_${category}`, JSON.stringify(true));
-    }
-  });
-  newOlContainer.appendChild(newOl);
-  return newOlContainer;
 }
 
 function initializeMutationObserver() {
