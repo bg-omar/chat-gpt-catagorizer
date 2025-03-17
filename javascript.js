@@ -22,6 +22,7 @@ let projectId = extractProjectId();
 let projectCategorized = false;
 let navScrollStart = 0;
 let navScroll = 0;
+let pageIsProject = false;
 let projectScroll = 0;
 let projectScrollStart = 0;
 
@@ -36,19 +37,10 @@ const sortListsButton = document.createElement('button');
 
 document.addEventListener('DOMContentLoaded', () => {
   initializeButtons();
-  setTimeout(() => {
-    document.querySelectorAll('div.absolute.bottom-0.top-0.inline-flex').forEach(div => {
-      div.classList.remove('invisible');
-      div.style.visibility = "visible";
-      div.style.opacity = "1";
-      div.style.display = "flex";
-    });
-  }, 500);
-
   setStates();
   repeater();
   monitorProjectChanges();
-  //initializeMutationObserver();
+  initializeMutationObserver();
   initializeButtonClickListeners();
 });
 
@@ -103,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cursor = cursorMatch ? parseInt(cursorMatch[1], 10) : 0; // Detect cursor
 
       if (match) {
+        pageIsProject = true;
         projectId = match[0]; // Extract project identifier (g-p-XXXXXXXXXX)
 
         const clonedResponse = response.clone();
@@ -135,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function getStates() {
   try {
     isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
-    isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isScrollEnabled'));
+    isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isNavScrollEnabled'));
     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled'));
     sortListTriggered = JSON.parse(sessionStorage.getItem('sortListsTriggered'));
     renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled'));
@@ -366,34 +359,25 @@ function sortLists() {
 
   // Clear processedItems set to reflect the latest DOM structure
   let processedItems = new Set();
-  let wordColors = {};
-  let conversations;
-  let getConversations;
-
-  try {
-    wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
-    getConversations = managesessionStorage('get') || {};
-    conversations = Array.isArray(getConversations)
-        ? getConversations
-        : Array.from(getConversations);
-  } catch (e) {
-    console.error('Error parsing wordColors from sessionStorage:', e);
-  }
+  let wordColors = JSON.parse(sessionStorage.getItem('wordColors')) || {};
+  let getConversations = managesessionStorage('get') || {};
+  let conversations = Array.isArray(getConversations) ? getConversations : Array.from(getConversations);
 
   let totalitems = 0;
-  // console.log("olListsToCategorize: ", olListsToCategorize);
+
+
   olListsToCategorize.forEach((ol) => {
     ol.setAttribute('style', 'display: block;');
     // console.log("ol: ", ol);
     const listItems = ol.querySelectorAll('li');
-    listItems.forEach((item) => {
+    listItems.forEach( (item) => {
       totalitems++;
       if (processedItems.has(item)) return;
-      // console.log("%c 5 --> Line: 312||javascript.js\n item: ", "color:#0ff;", item);
+
       const category = item.getAttribute('data-category');
       let dateStr = item.getAttribute('data-date');
       const dataId = item.getAttribute('data-id');
-      // console.log("%c 5 --> Line: 316||javascript.js\n item: ", "color:#0ff;", item);
+
       let date2;
       getConversations.forEach((item) => {
         if (dataId === item.id) {
@@ -402,9 +386,8 @@ function sortLists() {
       });
       if (dateStr !== undefined) {
         conversations = removeObjectWithId(conversations, dataId);
-        // console.log("conversation removed: ", conversations.length, dataId);
       }
-      // console.log("%c 5 --> Line: 327||javascript.js\n item: ", "color:#0ff;", item);
+
       const fallbackDate = date2 !== undefined ? date2 : new Date(0); // Epoch time for missing dates
       const date =
           date2 !== undefined
@@ -412,7 +395,7 @@ function sortLists() {
               : dateStr
                   ? new Date(dateStr)
                   : fallbackDate;
-      // console.log("%c 5 --> Line: 334||javascript.js\n item: ", "color:#0ff;", item);
+
       if (category) {
         if (!categories[category]) categories[category] = [];
         categories[category].push({ item, date });
@@ -425,12 +408,13 @@ function sortLists() {
   });
 
   // Ensure there's an <ol> element in the container.
+  let olElement;
   if (!olListsToCategorize[0]) {
-    // Create <ol> if it doesn't exist
     olElement = document.createElement('ol');
     olListsToCategorize.appendChild(olElement);
+  } else {
+    olElement = olListsToCategorize[0];
   }
-  let olElement = olListsToCategorize[0];
 
   let orphans = 0;
   if (conversations && conversations.length > 0) {
@@ -519,34 +503,25 @@ function sortLists() {
 // = SORT PROJECT ITEMS
 function sortProject() {
   const projectContainer = document.querySelector("div.mb-14.mt-6");
-  if (!projectContainer) return;
+  if (!projectContainer || cursorTotal !== null || projectCategorized) return;
 
-  if (cursorTotal !== null || projectCategorized) {
-    return;
-  }
 
   const projectId = extractProjectId() || null;
   console.log("🚀 Project Sorting Started");
 
   const projectCategories = {};
   const uncategorizedProjectItems = [];
-  const processedItems = new Set();
+  let processedItems = new Set();
 
-  let wordColors = {};
-  let conversations = [];
 
-  try {
-    wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
-    const storedProjectConversations = JSON.parse(sessionStorage.getItem("conversations_" + projectId)) || [];
-    conversations = Array.isArray(storedProjectConversations) ? storedProjectConversations : Array.from(storedProjectConversations);
-  } catch (e) {
-    console.error("Error retrieving session data:", e);
-  }
+  let wordColors = JSON.parse(sessionStorage.getItem("wordColors")) || {};
+  let conversations = JSON.parse(sessionStorage.getItem("conversations_" + extractProjectId())) || [];
 
   const listItems = Array.from(projectContainer.querySelectorAll("ol li"));
 
   listItems.forEach((item) => {
     if (processedItems.has(item)) return;
+    // Trigger a hover event to make sure buttons appear
 
     const category = item.getAttribute("data-category");
     const dataId = item.getAttribute("data-id");
@@ -594,13 +569,6 @@ function sortProject() {
       buttonContainer.appendChild(button);
       clonedItem.appendChild(buttonContainer);
     }
-
-    // if (category) {
-    //     if (!projectCategories[category]) projectCategories[category] = [];
-    //     projectCategories[category].push({ item: clonedItem, date });
-    // } else {
-    //     uncategorizedProjectItems.push({ item: clonedItem, date });
-    // }
 
     if (category) {
       if (!projectCategories[category]) projectCategories[category] = [];
@@ -656,9 +624,6 @@ function sortProject() {
 
   projectContainer.appendChild(fragment);
   console.log("🚀 Project categories successfully sorted!");
-  setTimeout(() => {
-    console.log("After sorting:", document.querySelectorAll('button[data-testid$="-options"]').length);
-  }, 1000);
 
   reinitializeDropdowns();
   initializeButtonClickListeners();
@@ -754,12 +719,12 @@ function scrollAndEvent(amount, container = 'nav') {
   }
 
 
-  if(container == 'nav' && amount == 0){
+  if(container === 'nav' && amount === 0){
     navScrollStart = scrollContainer.scrollTop;
     //console.log('navScroll: ', navScroll);
 
   }
-  if(container == 'project' && amount == 0){
+  if(container === 'project' && amount === 0){
     projectScrollStart = scrollContainer.scrollTop;
     //console.log('projectScroll: ', projectScroll);
     if(cursorTotal === null) {
@@ -775,17 +740,17 @@ function scrollAndEvent(amount, container = 'nav') {
     scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
   }
 
-  if (amount != 0) {
-    if( container == 'project' ){
-      if( projectScroll == scrollContainer.scrollTop) {
+  if (amount !== 0) {
+    if( container === 'project' ){
+      if( projectScroll === scrollContainer.scrollTop) {
         projectScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
         scrollContainer.scrollTop = projectScroll
       } else {
         scrollContainer.scrollTop = projectScroll + scrollContainer.scrollHeight - amount;
       }
     }
-    if ( container == 'nav' ){
-      if( navScroll == scrollContainer.scrollTop) {
+    if ( container === 'nav' ){
+      if( navScroll === scrollContainer.scrollTop) {
         navScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
         scrollContainer.scrollTop = navScroll
       } else {
@@ -793,7 +758,7 @@ function scrollAndEvent(amount, container = 'nav') {
       }
     }
   } else {
-    scrollContainer.scrollTop = container == 'project' ? projectScrollStart : navScrollStart;
+    scrollContainer.scrollTop = container === 'project' ? projectScrollStart : navScrollStart;
   }
 
   // Dispatch the scroll event to trigger the website's fetching logic
@@ -940,14 +905,6 @@ function initializeMutationObserver() {
   }
 }
 
-// 🔄 **Merge Conversations & Remove Duplicates**
-function mergeAndCleanConversations2(existingConversations, newConversations) {
-  const seenIds = new Set(existingConversations.map((conv) => conv.id));
-  const filteredNew = newConversations.filter((conv) => !seenIds.has(conv.id));
-  return [...existingConversations, ...filteredNew];
-}
-
-// 🔄 **Merge Conversations, Remove Duplicates, and Handle Renames**
 function mergeAndCleanConversations(existingConversations, newConversations) {
   const conversationMap = new Map(existingConversations.map(conv => [conv.id, conv]));
 

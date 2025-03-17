@@ -17,9 +17,7 @@ html {
 }
 
 ol {
-	transition:
-					height 0.3s ease,
-					opacity 0.3s ease;
+	transition:height 0.3s ease, opacity 0.3s ease;
 	overflow: hidden;
 }
 
@@ -69,17 +67,7 @@ body > div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0 > d
 }
 
 // Target the chat container and force it to occupy the full width
-.mx-auto,
-.flex,
-.flex-1,
-.gap-4,
-.text-base,
-.md,
-.lg,
-.xl,
-.lg,
-.w-full,
-.mx-auto {
+.mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg\:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
 	width: 90% !important;
 	max-width: 90% !important;
 	min-width: 90% !important;
@@ -110,34 +98,6 @@ a .max-w-6xl {
 	flex-direction: row;
 }
 
-// ///* Visible when parent is hovered
-// .can-hover\:group-hover\:flex {
-//   display: flex !important;
-//   opacity: 1 !important;
-//   visibility: visible !important;
-// }
-
-
-///* Prevent dropdown from hiding when interacting
-.dropdown-menu {
-	pointer-events: auto;
-}
-
-.group:hover .dropdown-menu {
-	display: block; //* Show on hover
-}
-
-.group {
-	position: relative;
-}
-
-.dropdown-menu {
-	position: absolute;
-	z-index: 50;
-	background-color: #fff;
-	border: 1px solid #ddd;
-	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
 
 
 ///* Avoid closing when interacting with the dropdown
@@ -207,9 +167,7 @@ a .max-w-6xl {
 	}
 }
 
-.md\:max-w-3xl,
-.lg\:max-w-\[40rem\],
-.xl\:max-w-\[48rem\] {
+.md\:max-w-3xl, .lg\:max-w-\[40rem\], .xl\:max-w-\[48rem\] {
 	// Remove restrictive maximum widths for wider display
 	@media (min-width: 768px) {
 		max-width: 90%;
@@ -262,6 +220,35 @@ body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.f
 	max-width: 100%;
 }
 
+///* Visible when parent is hovered
+.can-hover\:group-hover\:flex:hover {
+	display: flex !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+
+
+///* Prevent dropdown from hiding when interacting
+.dropdown-menu {
+	pointer-events: auto;
+}
+
+.group:hover .dropdown-menu {
+	display: block; //* Show on hover
+}
+
+.group {
+	position: relative;
+}
+
+.dropdown-menu {
+	position: absolute;
+	z-index: 50;
+	background-color: #fff;
+	border: 1px solid #ddd;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
 
 /* Ensure the container and button are always visible */
 div.absolute.bottom-0.top-0.inline-flex {
@@ -277,7 +264,7 @@ div.absolute.bottom-0.top-0.inline-flex {
 
 
 /* Remove the 'invisible' class effect */
-.invisible {
+.can-hover\:group-hover\:visible, .invisible {
 	visibility: visible !important;
 	opacity: 1 !important;
 	display: flex !important;
