@@ -1,278 +1,277 @@
 /* Set the body or main container to 100% width */
 body,
 html {
-  width: 100%;
+	width: 100%;
 }
 
+
+
 .katex {
-  font-size: 1.2em;
-  line-height: 1.5;
+	font-size: 1.2em;
+	line-height: 1.5;
 }
 
 .katex-display {
-  margin: 1em 0;
-  text-align: center;
+	margin: 1em 0;
+	text-align: center;
 }
 
 ol {
-  transition:
-    height 0.3s ease,
-    opacity 0.3s ease;
-  overflow: hidden;
+	transition:height 0.3s ease, opacity 0.3s ease;
+	overflow: hidden;
 }
 
 .category-container.drag-over {
-  border: 2px dashed #00f;
+	border: 2px dashed #00f;
 }
 
 div.relative.mt-5 {
-  h3 {
-    width: 99% !important;
-    padding: 0.25rem 1rem !important;
-    box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-    line-height: 0.5rem;
-    border: 1px dotted #fff;
-    background-color: #202;
-  }
+	h3 {
+		width: 99% !important;
+		padding: 0.25rem 1rem !important;
+		box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+		line-height: 0.5rem;
+		border: 1px dotted #fff;
+		background-color: #202;
+	}
 }
-
+body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.flex-col.focus-visible\:outline-0.h-full > div.flex-1.overflow-hidden.\@container\/thread.translate-y-\[2rem\].-mt-\[2rem\].pb-\[1\.5rem\] > div > div > article:nth-child(20) > div > div > div > div > div > div > div > div > div.absolute.bottom-0.right-full.top-0.-mr-3\.5.pr-5.pt-2.\[\.group\/conversation-turn\:hover_\&\]\:flex{
+	display: block;
+}
 h3 {
-  width: 90% !important;
-  padding: 0.5rem 1rem !important;
-  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-  border: 1px dotted;
-  line-height: 1rem;
-  background-color: #202;
+	width: 90% !important;
+	padding: 0.5rem 1rem !important;
+	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	border: 1px dotted;
+	line-height: 1rem;
+	background-color: #202;
 }
 
 h4 {
-  color: #64edd3;
-  width: 90% !important;
-  border: 1px dotted #fff;
-  padding: 0.5rem 1rem !important;
-  line-height: 1rem;
-  margin: 0;
-  background-color: #202;
-  box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
+	color: #64edd3;
+	width: 90% !important;
+	border: 1px dotted #fff;
+	padding: 0.5rem 1rem !important;
+	line-height: 1rem;
+	margin: 0;
+	background-color: #202;
+	box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
 }
 
-body
-  > div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0
-  > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden
-  > main
-  > div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0
-  > div.md\:pt-0.dark\:border-white\/20.md\:border-transparent.md\:dark\:border-transparent.w-full
-  > div
-  > div.m-auto.text-base.px-3.md\:px-4.w-full.md\:px-5.lg\:px-4.xl\:px-5
-  > div {
-  max-width: 95%;
+body > div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0 > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0 > div.md\:pt-0.dark\:border-white\/20.md\:border-transparent.md\:dark\:border-transparent.w-full > div > div.m-auto.text-base.px-3.md\:px-4.w-full.md\:px-5.lg\:px-4.xl\:px-5 > div {
+	max-width: 95%;
 }
 
-body
-  > div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0
-  > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden
-  > main
-  > div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0
-  > div.flex-1.overflow-hidden.\@container\/thread
-  > div
-  > div
-  > div
-  > div
-  > article:nth-child(2)
-  > div
-  > div {
-  max-width: 95%;
+body > div.relative.flex.h-full.w-full.overflow-hidden.transition-colors.z-0 > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.h-full.flex-col.focus-visible\:outline-0 > div.flex-1.overflow-hidden.\@container\/thread > div > div > div > div > article:nth-child(2) > div > div {
+	max-width: 95%;
 }
 
 // Target the chat container and force it to occupy the full width
-.mx-auto,
-.flex,
-.flex-1,
-.gap-4,
-.text-base,
-.md,
-.lg:gap-6,
-.md,
-.lg,
-.xl,
-.lg,
-.w-full,
-.mx-auto {
-  width: 90% !important;
-  max-width: 90% !important;
-  min-width: 90% !important;
-  padding: 0;
+.mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg\:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
+	width: 90% !important;
+	max-width: 90% !important;
+	min-width: 90% !important;
+	padding: 0;
 }
 
 a .max-w-6xl {
-  max-width: 95%;
+	max-width: 95%;
 }
 
 .prose :where(hr):not(:where(.not-prose)) {
-  border-top-width: 1px;
-  margin-bottom: 0.25em;
-  margin-top: 0.25em;
+	border-top-width: 1px;
+	margin-bottom: 0.25em;
+	margin-top: 0.25em;
 }
 
 .katex-display {
-  display: inline;
-  margin: 0.25em 0;
-  text-align: center;
+	display: inline;
+	margin: 0.25em 0;
+	text-align: center;
 }
 
 .copied-message {
-  display: none;
+	display: none;
 }
 
 .flex-row-reverse {
-  flex-direction: row;
+	flex-direction: row;
 }
 
-///* Visible when parent is hovered
-.can-hover\:group-hover\:flex:hover {
-  display: flex !important;
-}
 
-///* Prevent dropdown from hiding when interacting
-.dropdown-menu {
-  pointer-events: auto;
-}
-
-.group:hover .dropdown-menu {
-  display: block; //* Show on hover
-}
-
-.group {
-  position: relative;
-}
-
-.dropdown-menu {
-  position: absolute;
-  z-index: 50;
-  background-color: #fff;
-  border: 1px solid #ddd;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.group:hover .dropdown-menu {
-  display: block; //* Show on hover
-}
 
 ///* Avoid closing when interacting with the dropdown
 .dropdown-menu:hover {
-  display: block;
+	display: block;
 }
 
 .mr-1 .rounded-xl .items-center .text-sm {
-  color: #f0f;
-  font-size: 1.25rem;
-  line-height: 1rem;
-  border-color: #f0f;
+	color: #f0f;
+	font-size: 1.25rem;
+	line-height: 1rem;
+	border-color: #f0f;
 }
 
 .mr-1 .rounded-xl .items-center {
-  color: #f0f;
-  border-color: #f0f;
+	color: #f0f;
+	border-color: #f0f;
 }
 
 .rounded-xl .items-center {
-  color: #f0f;
-  border-color: #f0f;
+	color: #f0f;
+	border-color: #f0f;
 }
 
 .highlighted {
-  padding: 3px;
-  margin: -7px 0;
-  font-weight: bold !important; ///* Optionally make it bold
+	padding: 3px;
+	margin: -7px 0;
+	font-weight: bold !important; ///* Optionally make it bold
 }
 
 .p-2 {
-  padding: 0.25rem;
+	padding: 0.25rem;
 }
 
 .text-sm {
-  font-size: 0.75rem;
-  line-height: 1rem;
+	font-size: 0.75rem;
+	line-height: 1rem;
 }
 
 .mx-auto {
-  // Center the container
-  margin-left: auto;
-  margin-right: auto;
+	// Center the container
+	margin-left: auto;
+	margin-right: auto;
 }
 
 .flex {
-  display: flex;
+	display: flex;
 }
 
 .flex-1 {
-  flex: 1; // Make the container take up available space
+	flex: 1; // Make the container take up available space
 }
 
 .gap-4 {
-  gap: 1rem; // You can tweak this if needed
+	gap: 1rem; // You can tweak this if needed
 }
 
 .md\:gap-5 {
-  @media (min-width: 768px) {
-    gap: 1.25rem;
-  }
+	@media (min-width: 768px) {
+		gap: 1.25rem;
+	}
 }
 
 .lg\:gap-6 {
-  @media (min-width: 1024px) {
-    gap: 1.5rem;
-  }
+	@media (min-width: 1024px) {
+		gap: 1.5rem;
+	}
 }
 
-.md\:max-w-3xl,
-.lg\:max-w-\[40rem\],
-.xl\:max-w-\[48rem\] {
-  // Remove restrictive maximum widths for wider display
-  @media (min-width: 768px) {
-    max-width: 90%;
-  }
+.md\:max-w-3xl, .lg\:max-w-\[40rem\], .xl\:max-w-\[48rem\] {
+	// Remove restrictive maximum widths for wider display
+	@media (min-width: 768px) {
+		max-width: 90%;
+	}
 }
 
 // Ensure the container always takes 90% of the available width
 .group\/conversation-turn {
-  width: 85%;
-  margin-left: auto;
-  margin-right: auto;
+	width: 85%;
+	margin-left: auto;
+	margin-right: auto;
 }
 
 // Other layout tweaks to ensure consistent appearance
 .flex-shrink-0 {
-  flex-shrink: 0;
+	flex-shrink: 0;
 }
 
 .min-w-0 {
-  min-width: 0;
+	min-width: 0;
 }
 
 .items-end {
-  align-items: flex-end;
+	align-items: flex-end;
 }
 
 // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
 .gizmo-bot-avatar {
-  width: 85%; // Adjust avatar width to 90% of its container (optional, depending on design)
+	width: 85%; // Adjust avatar width to 90% of its container (optional, depending on design)
 }
 
 // Any additional rules to override padding/margin if necessary
 .p-1 {
-  padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
+	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
 }
 
-//._main_5jn6z_1 {
-//    width: 90% !important;  // Or any desired width value
-//}
+// ._main_5jn6z_1 {
+//     width: 90% !important;  // Or any desired width value
+// }
 
 // .custom-width {
 // 	width: 85% !important;  // Or any desired value
 // }
 
 .mt-5 {
-  margin: 0;
+	margin: 0;
 }
 
+body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div.composer-parent.flex.flex-col.focus-visible\:outline-0.h-full > div.flex-1.overflow-hidden.\@container\/thread.translate-y-\[2rem\].-mt-\[2rem\].pb-\[1\.5rem\] > div > div > div > article:nth-child(88) > div > div > div > div > div > div > div > div {
+	max-width: 100%;
+}
+
+///* Visible when parent is hovered
+.can-hover\:group-hover\:flex:hover {
+	display: flex !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+
+
+///* Prevent dropdown from hiding when interacting
+.dropdown-menu {
+	pointer-events: auto;
+}
+
+.group:hover .dropdown-menu {
+	display: block; //* Show on hover
+}
+
+.group {
+	position: relative;
+}
+
+.dropdown-menu {
+	position: absolute;
+	z-index: 50;
+	background-color: #fff;
+	border: 1px solid #ddd;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+
+/* Ensure the container and button are always visible */
+div.absolute.bottom-0.top-0.inline-flex {
+	display: flex !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+div.absolute.bottom-0.top-0.inline-flex {
+	display: flex !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+}
+
+
+/* Remove the 'invisible' class effect */
+.can-hover\:group-hover\:visible, .invisible {
+	visibility: visible !important;
+	opacity: 1 !important;
+	display: flex !important;
+}
+
+.can-hover\:group-hover\:visible {
+	visibility: visible !important;
+	opacity: 1 !important;
+	display: flex !important;
+}
