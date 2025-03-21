@@ -556,6 +556,7 @@ function sortProject() {
       const button = document.createElement("button");
       button.className = "flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary";
       button.setAttribute("data-testid", `history-item-${dataId}-options`);
+      button.setAttribute("id", `radix-${dataId}`);
       button.setAttribute("aria-label", "Open conversation options");
       button.setAttribute("type", "button");
 
@@ -653,6 +654,11 @@ function createCategoryContainer(category, items, color) {
   categoryHeader.style.cursor = 'pointer';
   newOlContainer.appendChild(categoryHeader);
 
+  categoryHeader.addEventListener('click', () => {
+    newOl.style.display = newOl.style.display === 'none' ? 'block' : 'none';
+    collapseIcon.textContent = newOl.style.display === 'none' ? '[+]' : '[-]';
+    localStorage.setItem(`categoryState_${category}`, JSON.stringify(newOl.style.display !== 'none'));
+  });
   const newOl = document.createElement('ol');
   newOl.style.display = isCollapsed ? 'none' : 'block';
 
@@ -663,25 +669,70 @@ function createCategoryContainer(category, items, color) {
     console.warn(`⚠️ Empty category detected: ${category}`);
   } else {
     items.forEach((item) => {
-      //console.log(`✅ Appending to ${category}:`, item);
-      const clonedItem = item.cloneNode(true, true);
-      const originalButton = item.querySelector('button[data-testid$="-options"]');
-      if (originalButton) {
-        clonedItem.appendChild(originalButton.cloneNode(true));
+      // Ensure the .group container exists and has the right classes
+      const groupDiv = item.querySelector('.group');
+      if (groupDiv) {
+        groupDiv.classList.add('group');
+
+        // If options button is missing inside the group, re-add it
+        if (!groupDiv.querySelector('button[data-testid$="-options"]')) {
+          const dataId = item.getAttribute('data-id');
+
+          const buttonContainer = document.createElement('div');
+          buttonContainer.className = 'absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 hidden can-hover:group-hover:flex';
+
+          const button = document.createElement('button');
+          button.className = 'flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary';
+          button.setAttribute('data-testid', `history-item-${dataId}-options`);
+          button.setAttribute('aria-label', 'Open conversation options');
+          button.setAttribute('type', 'button');
+          button.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
+        </svg>
+      `;
+
+          buttonContainer.appendChild(button);
+          groupDiv.appendChild(buttonContainer);
+        }
       }
-      newOl.appendChild(clonedItem);
+
+      newOl.appendChild(item);
     });
+
   }
-
-  categoryHeader.addEventListener('click', () => {
-    newOl.style.display = newOl.style.display === 'none' ? 'block' : 'none';
-    collapseIcon.textContent = newOl.style.display === 'none' ? '[+]' : '[-]';
-    localStorage.setItem(`categoryState_${category}`, JSON.stringify(newOl.style.display !== 'none'));
-  });
-
   newOlContainer.appendChild(newOl);
   return newOlContainer;
 }
+
+function getRelativeDateCategory(dateStr) {
+  if (!dateStr) return 'Older';
+
+  const date = new Date(dateStr);
+  if (isNaN(date)) return 'Older';
+
+  const now = new Date();
+  const oneDay = 86400000; // 24 * 60 * 60 * 1000
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today - inputDate) / oneDay);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+
+  const thisWeekStart = new Date(today);
+  thisWeekStart.setDate(today.getDate() - today.getDay()); // Sunday
+  if (inputDate >= thisWeekStart) return 'This Week';
+
+  if (
+      inputDate.getFullYear() === today.getFullYear() &&
+      inputDate.getMonth() === today.getMonth()
+  ) return 'This Month';
+
+  return 'Older';
+}
+
 
 function toggleLaTeXRendering() {
   if (renderLatexEnabled) {
@@ -1005,20 +1056,22 @@ function renameChatHandler(mutation) {
 }
 
 function reinitializeDropdowns() {
-  document.querySelectorAll('[data-radix-menu-content]').forEach((dropdown) => {
-    // Custom initialization or reattachment logic as needed by the dropdown library
-  });
-  document.querySelectorAll('[data-testid$="-options"]').forEach((button) => {
+  document.querySelectorAll('button[data-testid$="-options"]').forEach((button) => {
     button.addEventListener('click', (event) => {
       event.stopPropagation();
-      const dropdown = button.closest('li').querySelector('.dropdown-menu');
-      if (dropdown) {
-        dropdown.style.display =
-            dropdown.style.display === 'block' ? 'none' : 'block';
-      }
-    });
+
+      // 🔥 Native event (bubbles, can be captured by ChatGPT's real code)
+      const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      });
+
+      button.dispatchEvent(clickEvent); // Trigger native dropdown logic
+    }, { once: true }); // Only bind once per button
   });
 }
+
 
 function initializeButtons() {
   derenderButton.style.cssText = getButtonStyles();
@@ -1201,7 +1254,7 @@ function initializeButtonClickListeners() {
 }
 
 function handleButtonClick(button) {
-  const buttonId = button.id || 'No ID';
+  const buttonId = button.id || button.getAttribute('data-testid') || 'No ID';
   console.log(`Button with ID ${buttonId} was clicked!`);
 
   // Reset the countdown
