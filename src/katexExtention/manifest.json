@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "LaTeX Renderer for ChatGPT",
+  "version": "1.0",
+  "description": "Renders LaTeX equations in ChatGPT using KaTeX.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Render LaTeX",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["katex.min.js", "main.js"],
+      "css": ["katex.min.css"]
+    }
+  ],
+
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
