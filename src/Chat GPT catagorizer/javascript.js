@@ -218,6 +218,7 @@ function repeater() {
     if (isPaused) return; // Skip execution if paused
     try {
       await getStates();
+      await waitForElement('div.bg-token-sidebar-surface-primary nav div.flex-col.flex-1.transition-opacity.duration-500.relative.pe-3.overflow-y-auto');
 
       if (apiOffset <= dataTotal) {
         await scrollAndEvent(300, 'nav');
@@ -782,73 +783,51 @@ function toggleLaTeXRendering() {
   }
 }
 
-function scrollAndEvent(amount, container = 'nav') {
-
-  // Find the scrolling container
+async function scrollAndEvent(amount, container = 'nav') {
   let scrollContainer;
-  if(container !== 'nav') {
+
+  if (container !== 'nav') {
     scrollContainer = document.querySelector(
         '.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div > section > div:nth-child(2) > div > div'
     );
   } else {
     scrollContainer = document.querySelector(
-        '.flex-col.flex-1.transition-opacity.duration-500.relative.pr-3.overflow-y-auto'
+        'div.bg-token-sidebar-surface-primary nav div.flex-col.flex-1.transition-opacity.duration-500.relative.pe-3.overflow-y-auto'
     );
   }
 
   if (!scrollContainer) {
-    // console.error('Scrolling container not found.');
+    console.warn('Scroll container not found yet:', container);
     return;
   }
 
-
-  if(container === 'nav' && amount === 0){
+  if (container === 'nav' && amount === 0) {
     navScrollStart = scrollContainer.scrollTop;
-    //console.log('navScroll: ', navScroll);
-
   }
-  if(container === 'project' && amount === 0){
+  if (container === 'project' && amount === 0) {
     projectScrollStart = scrollContainer.scrollTop;
-    //console.log('projectScroll: ', projectScroll);
-    if(cursorTotal === null) {
-      scrollContainer.scrollTop = 0;
-    } else if (apiOffset >= dataTotal) {
-      scrollContainer.scrollTop = 0;
-    }
-  }
-
-//console.log(container, 'amount: ', amount, 'scrollTop: ', scrollContainer.scrollTop, 'scrollHeight: ', scrollContainer.scrollHeight, 'clientHeight', scrollContainer.clientHeight);
-  if (scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight) {
-    scrollContainer.scrollTop = scrollContainer.scrollHeight - 200;
-    scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
   }
 
   if (amount !== 0) {
-    if( container === 'project' ){
-      if( projectScroll === scrollContainer.scrollTop) {
-        projectScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
-        scrollContainer.scrollTop = projectScroll
-      } else {
-        scrollContainer.scrollTop = projectScroll + scrollContainer.scrollHeight - amount;
-      }
+    if (container === 'project') {
+      projectScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
+      scrollContainer.scrollTop = projectScroll;
     }
-    if ( container === 'nav' ){
-      if( navScroll === scrollContainer.scrollTop) {
-        navScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
-        scrollContainer.scrollTop = navScroll
-      } else {
-        scrollContainer.scrollTop = navScroll + scrollContainer.scrollHeight - amount;
-      }
+    if (container === 'nav') {
+      navScroll = scrollContainer.scrollTop + scrollContainer.scrollHeight - amount;
+      scrollContainer.scrollTop = navScroll;
     }
   } else {
     scrollContainer.scrollTop = container === 'project' ? projectScrollStart : navScrollStart;
   }
 
-  // Dispatch the scroll event to trigger the website's fetching logic
-  scrollContainer.dispatchEvent(new Event('scroll', { bubbles: true }));
+  // Important: now trigger a strong event
+  const event = new Event('scroll', { bubbles: true, cancelable: true });
+  scrollContainer.dispatchEvent(event);
 
-  // Restore the initial scroll position
-  //scrollContainer.scrollTop = initialScrollTop;
+  // Optionally, trigger a 'wheel' event if you want to fully simulate user
+  const wheelEvent = new WheelEvent('wheel', { bubbles: true, cancelable: true });
+  scrollContainer.dispatchEvent(wheelEvent);
 
   if (apiOffset >= dataTotal) {
     isNavScrollEnabled = false;
@@ -856,6 +835,7 @@ function scrollAndEvent(amount, container = 'nav') {
     setStates();
   }
 }
+
 
 function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
   const container = document.querySelector(
@@ -874,6 +854,23 @@ function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
     console.error('Max retries reached. Container not found.');
   }
 }
+
+function waitForElement(selector, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const element = document.querySelector(selector);
+      if (element) {
+        clearInterval(interval);
+        resolve(element);
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(interval);
+        reject(new Error(`Timeout: ${selector} not found`));
+      }
+    }, 100);
+  });
+}
+
 
 function createListItem(conversation, index) {
   const li = document.createElement('li');
@@ -1117,11 +1114,12 @@ function initializeButtons() {
   // Create container for the buttonsD
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = `
-    position: fixed;
+    position: fixed; /* instead of absolute */
     bottom: 50%;
     right: 40px;
     display: grid;
     gap: 10px;
+    z-index: 5000; /* much higher */
   `;
 
   offsetAmount.style.cssText = getButtonStyles();
@@ -1158,7 +1156,9 @@ function initializeButtons() {
   buttonContainer.appendChild(sortListsButton);
 
   // Add the container to the document body
-  document.body.appendChild(buttonContainer);
+  setTimeout(() => {
+    document.body.appendChild(buttonContainer);
+  }, 2500); // or even 2500ms
 }
 
 // Function to toggle pause state
