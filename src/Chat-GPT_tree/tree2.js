@@ -95,12 +95,23 @@ function getNodes() {
         header.id = 'chat-tree-header';
         header.textContent = '📜 Chat Tree View';
 
-        const toggleBtn = document.createElement('button');
-        toggleBtn.id = 'chat-tree-toggle';
-        toggleBtn.textContent = '+';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'chat-tree-toggle';
+    toggleBtn.textContent = '+';
+    header.appendChild(toggleBtn);
 
-        header.appendChild(toggleBtn);
-        root.appendChild(header);
+    const closeBtn = document.createElement('button');
+    closeBtn.id = 'chat-tree-close';
+    closeBtn.textContent = '✖';
+    closeBtn.title = 'Close panel';
+    closeBtn.onclick = () => {
+      root.remove();
+      // sessionStorage.removeItem('chatTreeCollapsed');
+      // sessionStorage.removeItem('chatTreePos');
+    };
+    header.appendChild(closeBtn);
+
+    root.appendChild(header);
 
         // Content
         const content = document.createElement('div');
@@ -111,7 +122,7 @@ function getNodes() {
             const isHidden = content.style.display === 'none';
             content.style.display = isHidden ? 'block' : 'none';
             toggleBtn.textContent = isHidden ? '—' : '+';
-            localStorage.setItem('chatTreeCollapsed', (!isHidden).toString());
+            sessionStorage.setItem('chatTreeCollapsed', (!isHidden).toString());
         });
 
         // Refresh
@@ -175,17 +186,17 @@ function getNodes() {
 
                     item.onclick = () => {
                         turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        localStorage.setItem('chatTreeLastScrollIndex', i);
+                        sessionStorage.setItem('chatTreeLastScrollIndex', i);
                     };
 
                     if (isEdited) {
                         const fork = document.createElement('details');
                         fork.className = 'chat-tree-fork';
                         const forkKey = `chatTreeFork-open-${userTurnCount}`;
-                        const forkState = localStorage.getItem(forkKey);
+                        const forkState = sessionStorage.getItem(forkKey);
                         fork.open = forkState !== 'false';
                         fork.addEventListener('toggle', () => {
-                            localStorage.setItem(forkKey, fork.open.toString());
+                            sessionStorage.setItem(forkKey, fork.open.toString());
                         });
 
                         const forkLabel = document.createElement('summary');
@@ -245,18 +256,18 @@ function buildTree(turns, editedIdSet) {
 
             item.onclick = () => {
                 turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                localStorage.setItem('chatTreeLastScrollIndex', i);
+                sessionStorage.setItem('chatTreeLastScrollIndex', i);
             };
 
             if (isEdited) {
                 const fork = document.createElement('details');
                 fork.className = 'chat-tree-fork';
                 const forkKey = `chatTreeFork-open-${userTurnCount}`;
-                const forkState = localStorage.getItem(forkKey);
+                const forkState = sessionStorage.getItem(forkKey);
                 fork.open = forkState !== 'false';
 
                 fork.addEventListener('toggle', () => {
-                    localStorage.setItem(forkKey, fork.open.toString());
+                    sessionStorage.setItem(forkKey, fork.open.toString());
                 });
 
                 const forkLabel = document.createElement('summary');
@@ -282,9 +293,9 @@ function makeDraggable(element) {
     element.style.cssText += `
     position: fixed !important;
     top: 20px;
-    right: 20px;
+    left: 20px;
     z-index: 2000;
-    cursor: move;
+    cursor: drag;
     width: 300px;
 		max-height: 70vh;
     overflow: visible;
@@ -301,6 +312,7 @@ function makeDraggable(element) {
     // Add event listeners for dragging
     element.addEventListener('mousedown', (event) => {
         isDragging = true;
+        element.style.cursor = 'grabbing';
         offsetX = event.clientX - element.getBoundingClientRect().left;
         offsetY = event.clientY - element.getBoundingClientRect().top;
         document.body.style.userSelect = 'none'; // Prevent text selection while dragging
