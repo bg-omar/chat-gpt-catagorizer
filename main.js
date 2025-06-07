@@ -35,6 +35,7 @@ const pauseButton = document.createElement('button');
 const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
+let chatTreeObserver = null;
 // Function to dynamically load KaTeX CSS and JS
 
 
@@ -205,15 +206,17 @@ function repeater() {
     }, 200); // ⏱️ Adjust as needed
 
     // Reload tree when navigating to a new conversation
-    const observer = new MutationObserver(() => {
-      const alreadyInjected = document.getElementById('chat-tree-panel');
-      const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
-      if (chatReady && !alreadyInjected) {
-        getNodes();
-      }
-    });
+    if (!chatTreeObserver) {
+      chatTreeObserver = new MutationObserver(() => {
+        const alreadyInjected = document.getElementById('chat-tree-panel');
+        const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
+        if (chatReady && !alreadyInjected) {
+          getNodes();
+        }
+      });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+      chatTreeObserver.observe(document.body, { childList: true, subtree: true });
+    }
 
     if (isPaused) return; // Skip execution if paused
     try {
@@ -1581,6 +1584,8 @@ function getNodes() {
 
       content.appendChild(list);
       root.appendChild(content);
+      const existingPanel = document.getElementById('chat-tree-panel');
+      if (existingPanel) existingPanel.remove();
       document.body.appendChild(root);
 
       if (dragable) makeDraggable(root);

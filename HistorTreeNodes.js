@@ -1,5 +1,6 @@
 const dragable = true;
 const savedPos = localStorage.getItem('chatTreePos');
+let chatTreeObserver = null;
 
 
 document.addEventListener('dragstart', (e) => {
@@ -37,15 +38,17 @@ function repeater() {
     }, 200); // ⏱️ Adjust as needed
 
     // Reload tree when navigating to a new conversation
-    const observer = new MutationObserver(() => {
-        const alreadyInjected = document.getElementById('chat-tree-panel');
-        const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
-        if (chatReady && !alreadyInjected) {
-            getNodes();
-        }
-    });
+    if (!chatTreeObserver) {
+        chatTreeObserver = new MutationObserver(() => {
+            const alreadyInjected = document.getElementById('chat-tree-panel');
+            const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
+            if (chatReady && !alreadyInjected) {
+                getNodes();
+            }
+        });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+        chatTreeObserver.observe(document.body, { childList: true, subtree: true });
+    }
 
 }
 
@@ -265,6 +268,8 @@ function getNodes() {
       });
 
       // ⬇️ Inject OFFSCREEN (still inert)
+      const existingPanel = document.getElementById('chat-tree-panel');
+      if (existingPanel) existingPanel.remove();
       document.body.appendChild(root);
 
       // 🧠 Optional: Drag init
