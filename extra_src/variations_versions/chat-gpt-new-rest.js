@@ -504,7 +504,7 @@ function addCustomCSS() {
   const style = document.createElement('style');
   style.type = 'text/css';
 
-  // Define your CSS code as a string ---> Same scss as found in the separate styling.scss
+  // Define your CSS code as a string ---> Same scss as found in the separate main.scss
   const css = `
 			/* Set the body or main container to 100% width */
       body, html {

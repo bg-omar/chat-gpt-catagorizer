@@ -1,3 +1,5 @@
+const dragable = false;
+
 document.addEventListener('DOMContentLoaded', () => {
     repeater();
 });
@@ -18,8 +20,65 @@ function repeater() {
             }
         }
     }, 200); // ⏱️ Adjust as needed
+
+    // Reload tree when navigating to a new conversation
+    const observer = new MutationObserver(() => {
+        const alreadyInjected = document.getElementById('chat-tree-panel');
+        const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
+        if (chatReady && !alreadyInjected) {
+            getNodes();
+        }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
 }
 
+let globalTurns = [];
+let globalEditedIdSet = new Set();
+
+async function scanForEditedTurns() {
+    globalEditedIdSet.clear();
+
+    for (const turn of globalTurns) {
+        const testId = turn.getAttribute('data-testid');
+        if (!testId) continue;
+
+        turn.scrollIntoView({ behavior: 'instant', block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 120));
+
+        const prevButton = turn.querySelector('button[aria-label="Previous response"]');
+        if (prevButton) {
+            globalEditedIdSet.add(testId);
+            console.log("✏️ Detected edited:", testId);
+        }
+    }
+
+    // Rebuild UI now that we know which are edited
+    buildTree(globalTurns, globalEditedIdSet);
+}
+
+
+async function detectEditedTurns(turns) {
+    const editedIdSet = new Set();
+
+    for (const turn of turns) {
+        const testId = turn.getAttribute('data-testid');
+        if (!testId) continue;
+
+        turn.scrollIntoView({ behavior: 'instant', block: 'center' });
+
+        await new Promise(resolve => setTimeout(resolve, 150)); // give it a moment
+
+        const prevButton = turn.querySelector('button[aria-label="Previous response"]');
+        if (prevButton) {
+            editedIdSet.add(testId);
+            console.log('✏️ Detected edited:', testId);
+        }
+    }
+
+    return editedIdSet;
+}
 
 
 function getNodes() {

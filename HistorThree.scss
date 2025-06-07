@@ -1,17 +1,49 @@
+#chat-tree-panel,
+#chat-tree-panel * {
+  -webkit-user-drag: none !important;
+  user-select: none !important;
+}
 
 #chat-tree-panel {
   position: fixed !important;
-  top: 10px;
-  right: 50px;
+  top: 50px;       /* ✅ allow Y movement */
+  left: 50px;      /* ✅ allow X movement */
+  right: auto;     /* ✅ must cancel this if it exists */
+  bottom: auto;
+  cursor: grab;
   z-index: 2000;
   max-height: calc(70vh + 40px); // include header height
   overflow: visible;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
   width: 320px;
-  background: #171717;
+  background: #171717BB;
   border: 1px solid #ccc;
   border-radius: 8px;
   color: #F0F;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+#chat-tree-panel.collapsed {
+  width: 20px !important;
+  height: 20px !important;
+  overflow: hidden !important;
+  padding: 0;
+}
+
+#chat-tree-panel.collapsed #chat-tree-header,
+#chat-tree-panel.collapsed #chat-tree-content {
+  display: none !important;
+}
+
+#chat-tree-panel.collapsed::after {
+  content: '+';
+  color: #0f0;
+  font-size: 18px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 
@@ -35,6 +67,17 @@
   font-size: 16px;
   cursor: pointer;
 }
+
+#chat-tree-close {
+  font-weight: bold;
+  border: none;
+  background: none;
+  color: #f44;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
 #chat-tree-content {
   padding: 10px;
   max-height: 70vh;
