@@ -1,5 +1,10 @@
 const dragable = true;
 const savedPos = localStorage.getItem('chatTreePos');
+let conversationId = window.location.pathname; // Unique per chat URL
+function loadTree() {
+    const data = localStorage.getItem(`chatTree_${conversationId}`);
+    return data ? JSON.parse(data) : [];
+}
 
 
 document.addEventListener('dragstart', (e) => {
@@ -18,8 +23,11 @@ document.addEventListener('dragstart', (e) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     repeater();
+    const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+    globalTurns = turns;
+    const editedIdSet = new Set(); // you might want to re-detect here or store separately
+    buildTree(turns, editedIdSet);
 });
-
 
 
 function repeater() {
@@ -35,18 +43,6 @@ function repeater() {
             }
         }
     }, 200); // ⏱️ Adjust as needed
-
-    // Reload tree when navigating to a new conversation
-    const observer = new MutationObserver(() => {
-        const alreadyInjected = document.getElementById('chat-tree-panel');
-        const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
-        if (chatReady && !alreadyInjected) {
-            getNodes();
-        }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
 }
 
 let globalTurns = [];
@@ -69,9 +65,10 @@ async function scanForEditedTurns() {
         }
     }
 
-    // Rebuild UI now that we know which are edited
+    saveTree(globalTurns, globalEditedIdSet);  // ✅ save after detection
     buildTree(globalTurns, globalEditedIdSet);
 }
+
 
 
 async function detectEditedTurns(turns) {
@@ -276,70 +273,107 @@ function getNodes() {
     }, 1000);
 }
 
-
 function buildTree(turns, editedIdSet) {
     const content = document.getElementById('chat-tree-content');
     if (!content) return;
 
-    // Remove previous list
     const oldList = content.querySelector('ul');
     if (oldList) oldList.remove();
 
+    const storedTree = loadTree();
     const list = document.createElement('ul');
     let userTurnCount = 0;
 
-    turns.forEach((turn, i) => {
-        const testId = turn.getAttribute('data-testid');
-        const user = turn.querySelector('[data-message-author-role="user"]');
-        const isEdited = editedIdSet.has(testId);
-        const summaryText = user?.innerText?.trim()?.slice(0, 80).replace(/\n/g, ' ') || null;
+    storedTree.forEach((itemData, i) => {
+        const { testId, userMessage, isEdited } = itemData;
+        const turn = turns.find(t => t.getAttribute('data-testid') === testId);
 
-        if (user && summaryText) {
-            const item = document.createElement('li');
-            item.className = 'chat-tree-item';
-            item.textContent = `${++userTurnCount}: ${summaryText}`;
-            item.dataset.turnIndex = i;
+        if (!turn || !userMessage) return;
 
-            if (isEdited) {
-                item.classList.add('chat-tree-edited');
-                item.title = '✏️ Edited message';
-                item.textContent += ' ✏️';
-            }
+        const item = document.createElement('li');
+        item.className = 'chat-tree-item';
+        item.textContent = `${++userTurnCount}: ${userMessage.slice(0, 80).replace(/\n/g, ' ')}`;
+        item.dataset.turnIndex = i;
 
-            item.onclick = () => {
-                turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                localStorage.setItem('chatTreeLastScrollIndex', i);
-            };
+        if (isEdited) {
+            item.classList.add('chat-tree-edited');
+            item.title = '✏️ Edited message';
+            item.textContent += ' ✏️';
 
-            if (isEdited) {
-                const fork = document.createElement('details');
-                fork.className = 'chat-tree-fork';
-                const forkKey = `chatTreeFork-open-${userTurnCount}`;
-                const forkState = localStorage.getItem(forkKey);
-                fork.open = forkState !== 'false';
+            const fork = document.createElement('details');
+            fork.className = 'chat-tree-fork';
+            const forkKey = `chatTreeFork-open-${conversationId}-${userTurnCount}`;
+            fork.open = localStorage.getItem(forkKey) === 'true';
 
-                fork.addEventListener('toggle', () => {
-                    localStorage.setItem(forkKey, fork.open.toString());
-                });
+            fork.addEventListener('toggle', () => {
+                localStorage.setItem(forkKey, fork.open.toString());
+            });
 
-                const forkLabel = document.createElement('summary');
-                forkLabel.textContent = `✏️ Fork ${userTurnCount}`;
-                fork.appendChild(forkLabel);
-                fork.appendChild(item);
-                list.appendChild(fork);
-            } else {
-                list.appendChild(item);
-            }
+            const forkLabel = document.createElement('summary');
+            forkLabel.textContent = `✏️ Fork ${userTurnCount}`;
+            fork.appendChild(forkLabel);
+            fork.appendChild(item);
+            list.appendChild(fork);
         } else {
-            const empty = document.createElement('li');
-            empty.className = 'chat-tree-empty';
-            empty.innerHTML = `<hr title="(No user message)">`;
-            list.appendChild(empty);
+            list.appendChild(item);
         }
+
+        item.onclick = () => {
+            turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            localStorage.setItem(`chatTreeLastScrollIndex_${conversationId}`, i);
+        };
     });
 
     content.appendChild(list);
 }
+
+/* --------------------------------------------------------------------
+ *  Chat-tree rebuild observer
+ *  – place this near the bottom of your main script (after buildTree)
+ * -------------------------------------------------------------------*/
+
+/* make conversationId writable so we can refresh it on navigation */
+conversationId = window.location.pathname;
+
+/* constants & debouncer ------------------------------------------------ */
+const CHAT_TREE_ID = 'chat-tree-panel';
+
+let rebuildQueued = false;
+function queueBuild() {
+    if (rebuildQueued) return;
+    rebuildQueued = true;
+
+    requestAnimationFrame(() => {
+        rebuildQueued = false;
+
+        /* ➊ refresh ID in case the URL changed without a full reload */
+        conversationId = window.location.pathname;
+
+        /* ➋ collect turns & rebuild */
+        const turns = Array.from(
+            document.querySelectorAll('[data-testid^="conversation-turn-"]')
+        );
+        globalTurns = turns;                 // keep your global in sync
+        const editedIdSet = new Set();       // or call your scan routine
+        buildTree(turns, editedIdSet);
+    });
+}
+
+/* one global observer --------------------------------------------------- */
+const observer = new MutationObserver((records) => {
+    /* Ignore mutations when *every* target lives inside our own panel */
+    const onlyInsidePanel = records.every(r =>
+        r.target.closest('#' + CHAT_TREE_ID)
+    );
+    if (onlyInsidePanel) return;
+
+    /* Something outside changed – schedule rebuild */
+    queueBuild();
+});
+
+/* start watching once – reuse for the whole tab */
+observer.observe(document.body, { childList: true, subtree: true });
+
 
 function makeDraggable(element) {
     element.setAttribute('draggable', 'false'); // 👈 prevent ghost image
@@ -403,4 +437,25 @@ function makeDraggable(element) {
     });
 
 
+}
+
+// Save entire tree structure with forks
+function saveTree(turns, editedIdSet) {
+    const treeData = turns.map(turn => {
+        const testId = turn.getAttribute('data-testid');
+        const userMessage = turn.querySelector('[data-message-author-role="user"]')?.innerText.trim() || '';
+        return {
+            testId,
+            userMessage,
+            isEdited: editedIdSet.has(testId),
+        };
+    });
+
+    localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(treeData));
+}
+
+// Load previously saved tree
+function loadTree() {
+    const data = localStorage.getItem(`chatTree_${conversationId}`);
+    return data ? JSON.parse(data) : [];
 }
