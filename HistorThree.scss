@@ -114,3 +114,17 @@
     margin-bottom: 4px;
   }
 }
+.chat-tree-fork-versions {
+  margin-left: 10px;
+  color: #ccc;
+  font-size: 11px;
+}
+.chat-tree-version-item {
+  cursor: pointer;
+  margin-bottom: 2px;
+  opacity: 0.85;
+}
+.chat-tree-version-item:hover {
+  text-decoration: underline;
+  color: #fff;
+}

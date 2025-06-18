@@ -1,10 +1,39 @@
 const dragable = true;
 const savedPos = localStorage.getItem('chatTreePos');
-let conversationId = window.location.pathname; // Unique per chat URL
+function getConversationIdHash() {
+    const path = window.location.pathname;
+    const match = path.match(/g-p-([a-f0-9]{32})/);
+    return match ? match[1] : 'unknown';
+}
+
+let conversationId = getConversationIdHash();
+
+console.log("%c 1 --> Line: 4||HistorTreeNodes.js\n conversationId: ","color:#f0f;", conversationId);
+
 function loadTree() {
     const data = localStorage.getItem(`chatTree_${conversationId}`);
     return data ? JSON.parse(data) : [];
 }
+
+// Save entire tree structure with forks
+function saveTree(turns, editedIdSet) {
+    const treeData = turns.map(turn => {
+        const testId = turn.getAttribute('data-testid');
+        const userMessages = Array.from(turn.querySelectorAll('[data-message-author-role="user"]'))
+            .map(m => m.innerText.trim())
+            .filter(Boolean);
+
+        return {
+            testId,
+            versions: userMessages,
+            isEdited: editedIdSet.has(testId),
+        };
+    });
+
+    localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(treeData));
+}
+
+
 
 
 document.addEventListener('dragstart', (e) => {
@@ -22,6 +51,11 @@ document.addEventListener('dragstart', (e) => {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+    } else {
+        console.warn('⚠️ document.body not available yet');
+    }
     repeater();
     const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
     globalTurns = turns;
@@ -109,13 +143,32 @@ function getNodes() {
         // 🔒 Header
         const header = document.createElement('div');
         header.id = 'chat-tree-header';
+        header.textContent = '📜';
         header.classList.add('collapsed');
-        header.textContent = '📜 Chat Tree View';
 
         const toggleBtn = document.createElement('button');
         toggleBtn.id = 'chat-tree-toggle';
         toggleBtn.textContent = '+';
         header.appendChild(toggleBtn);
+
+
+
+        // 🔃 Refresh Button
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = '🔄 Refresh';
+        refreshBtn.onclick = () => {
+            root.remove();
+            getNodes();
+        };
+        header.appendChild(refreshBtn);
+
+        // 🧠 Scan Button
+        const scanBtn = document.createElement('button');
+        scanBtn.textContent = '🧠 Scan';
+        scanBtn.style.marginLeft = '8px';
+        scanBtn.onclick = scanForEditedTurns;
+        header.appendChild(scanBtn);
+
 
         const closeBtn = document.createElement('button');
         closeBtn.id = 'chat-tree-close';
@@ -128,19 +181,20 @@ function getNodes() {
         };
         header.appendChild(closeBtn);
 
+
         root.appendChild(header);
 
         // 🔄 Content container
         const content = document.createElement('div');
         content.id = 'chat-tree-content';
-        content.style.display = 'none';
+        content.style.display = 'block';
 
-        header.addEventListener('click', () => {
+        toggleBtn.addEventListener('click', () => {
             const isHidden = content.style.display === 'none';
             content.style.display = isHidden ? 'block' : 'none';
             toggleBtn.textContent = isHidden ? '—' : '+';
             if (!isHidden) {
-                root.style.width = '20px';
+                root.style.width = '320px';
                 root.style.height = '20px';
                 root.style.overflow = 'hidden';
             } else {
@@ -151,21 +205,6 @@ function getNodes() {
             sessionStorage.setItem('chatTreeCollapsed', (!isHidden).toString());
         });
 
-        // 🔃 Refresh Button
-        const refreshBtn = document.createElement('button');
-        refreshBtn.textContent = '🔄 Refresh Tree';
-        refreshBtn.onclick = () => {
-            root.remove();
-            getNodes();
-        };
-        content.appendChild(refreshBtn);
-
-        // 🧠 Scan Button
-        const scanBtn = document.createElement('button');
-        scanBtn.textContent = '🧠 Scan Conversation';
-        scanBtn.style.marginLeft = '8px';
-        scanBtn.onclick = scanForEditedTurns;
-        content.appendChild(scanBtn);
 
         // 🌱 Collect conversation turns
         const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
@@ -285,8 +324,9 @@ function buildTree(turns, editedIdSet) {
     let userTurnCount = 0;
 
     storedTree.forEach((itemData, i) => {
-        const { testId, userMessage, isEdited } = itemData;
+        const { testId, versions = [], isEdited, forkOpen, forkSummary } = itemData;
         const turn = turns.find(t => t.getAttribute('data-testid') === testId);
+        const userMessage = versions[versions.length - 1]; // current version
 
         if (!turn || !userMessage) return;
 
@@ -295,6 +335,11 @@ function buildTree(turns, editedIdSet) {
         item.textContent = `${++userTurnCount}: ${userMessage.slice(0, 80).replace(/\n/g, ' ')}`;
         item.dataset.turnIndex = i;
 
+        item.onclick = () => {
+            turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            localStorage.setItem(`chatTreeLastScrollIndex_${conversationId}`, i);
+        };
+
         if (isEdited) {
             item.classList.add('chat-tree-edited');
             item.title = '✏️ Edited message';
@@ -302,26 +347,38 @@ function buildTree(turns, editedIdSet) {
 
             const fork = document.createElement('details');
             fork.className = 'chat-tree-fork';
-            const forkKey = `chatTreeFork-open-${conversationId}-${userTurnCount}`;
-            fork.open = localStorage.getItem(forkKey) === 'true';
+            fork.open = forkOpen ?? true;
 
             fork.addEventListener('toggle', () => {
-                localStorage.setItem(forkKey, fork.open.toString());
+                itemData.forkOpen = fork.open;
+                localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(storedTree));
             });
 
             const forkLabel = document.createElement('summary');
-            forkLabel.textContent = `✏️ Fork ${userTurnCount}`;
+            forkLabel.textContent = forkSummary || `✏️ Fork ${userTurnCount}`;
             fork.appendChild(forkLabel);
             fork.appendChild(item);
+
+            // ➕ Add sublist of versions (excluding the final one shown in main item)
+            const versionList = document.createElement('ul');
+            versionList.className = 'chat-tree-fork-versions';
+
+            versions.slice(0, -1).forEach((version, idx) => {
+                const versionItem = document.createElement('li');
+                versionItem.textContent = `↳ Version ${idx + 1}: ${version.slice(0, 60).replace(/\n/g, ' ')}`;
+                versionItem.className = 'chat-tree-version-item';
+                versionItem.onclick = () => {
+                    turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    localStorage.setItem(`chatTreeLastScrollIndex_${conversationId}`, i);
+                };
+                versionList.appendChild(versionItem);
+            });
+
+            fork.appendChild(versionList);
             list.appendChild(fork);
         } else {
             list.appendChild(item);
         }
-
-        item.onclick = () => {
-            turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            localStorage.setItem(`chatTreeLastScrollIndex_${conversationId}`, i);
-        };
     });
 
     content.appendChild(list);
@@ -333,7 +390,7 @@ function buildTree(turns, editedIdSet) {
  * -------------------------------------------------------------------*/
 
 /* make conversationId writable so we can refresh it on navigation */
-conversationId = window.location.pathname;
+conversationId = getConversationIdHash();
 
 /* constants & debouncer ------------------------------------------------ */
 const CHAT_TREE_ID = 'chat-tree-panel';
@@ -347,7 +404,7 @@ function queueBuild() {
         rebuildQueued = false;
 
         /* ➊ refresh ID in case the URL changed without a full reload */
-        conversationId = window.location.pathname;
+        conversationId = getConversationIdHash();
 
         /* ➋ collect turns & rebuild */
         const turns = Array.from(
@@ -439,23 +496,3 @@ function makeDraggable(element) {
 
 }
 
-// Save entire tree structure with forks
-function saveTree(turns, editedIdSet) {
-    const treeData = turns.map(turn => {
-        const testId = turn.getAttribute('data-testid');
-        const userMessage = turn.querySelector('[data-message-author-role="user"]')?.innerText.trim() || '';
-        return {
-            testId,
-            userMessage,
-            isEdited: editedIdSet.has(testId),
-        };
-    });
-
-    localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(treeData));
-}
-
-// Load previously saved tree
-function loadTree() {
-    const data = localStorage.getItem(`chatTree_${conversationId}`);
-    return data ? JSON.parse(data) : [];
-}
