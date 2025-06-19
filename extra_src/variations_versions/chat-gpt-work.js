@@ -1,73 +1,150 @@
-localStorage.setItem('offset', 0); // Keep nextOffset in sync with localStorage
+(function () {
+  localStorage.remove('authToken');
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const [resource, config] = args;
 
-function waitForContainerToLoad(callback, maxRetries = 50, retryCount = 0) {
-  const container = document.querySelector('#conversations-container');
-  if (container) {
-    console.log('Container loaded.');
-    callback();
-  } else if (retryCount < maxRetries) {
-    console.log('Waiting for container...');
-    setTimeout(() => waitForContainerToLoad(callback, maxRetries, retryCount + 1), 100);
-  } else {
-    console.error('Max retries reached. Container not found.');
-  }
-}
+    // Check if headers is a Headers instance or a plain object
+    if (config && config.headers) {
+      let token = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+      if (config.headers instanceof Headers) {
+        // For Headers object
+        if (config.headers.has('Authorization')) {
+          const authHeader = config.headers.get('Authorization');
+          if (authHeader.startsWith('Bearer ')) {
+            token = authHeader.split(' ')[1];
+          }
+        }
+      } else if (typeof config.headers === 'object') {
+        // For plain object
+        const authHeader = config.headers['Authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.split(' ')[1];
+        }
+      }
 
-  // Initial load
-  offset = parseInt(localStorage.getItem('offset'), 10) || 0;
+      if (token) {
+        console.log("Captured Bearer token from request:", token);
+        localStorage.setItem('authToken', token);
+      }
+    }
+
+    const response = await originalFetch(...args);
+    return response;
+  };
+})();
+
+// Initialize by waiting for token
+localStorage.setItem('apiOffset', 0);
+document.addEventListener('DOMContentLoaded', async () => {
+  apiOffset = parseInt(localStorage.getItem('apiOffset'), 10) || 0;
   repeater();
-  addCustomCSS();
+  // addCustomCSS(); Uncomment if needed
   initializeMutationObserver();
   initializeButtonClickListeners();
 
-  waitForContainerToLoad(() => {
-    fetchConversations(); // Now, fetchConversations() will only run when the container is available
-  });
-
+  await waitForToken();
+  fetchConversations();
 });
-// Retrieve offset from localStorage, default to 0 if not set
-let offset = parseInt(localStorage.getItem('offset'), 10) || 0;
-const limit = 28; // Matches API's default
-const order = 'updated';
-let isLoading = false;
+
+const apiLimit = 28; // Matches API's default
+const apiOrder = 'updated';
+let isScriptLoading = false;
+let shouldFetchMore = true; // Initially, allow fetching
+
+async function waitForToken() {
+  const maxRetries = 20;
+  let retries = 0;
+  while (!localStorage.getItem('authToken') && retries < maxRetries) {
+    console.log(`Waiting for Bearer token... Attempt ${retries + 1}`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    retries++;
+  }
+
+  if (!localStorage.getItem('authToken')) {
+    console.error("Bearer token not found after multiple retries.");
+    throw new Error("Bearer token not found");
+  }
+}
 
 async function fetchConversations() {
-  console.log('fetchConversations is starting');
-  if (isLoading) return; // Prevent duplicate calls
-  const container = document.querySelector('#conversations-container');
+  console.log('Starting fetchConversations, isScriptLoading: ', isScriptLoading);
+  if (isScriptLoading || !shouldFetchMore) return; // Prevent duplicate calls or when no more data is available
+
+  isScriptLoading = true;
+
+  try {
+    apiOffset = parseInt(localStorage.getItem('apiOffset'), 10) || 0;
+    console.log('apiOffset : ', apiOffset);
+
+    // Retrieve the token from local storage
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('Bearer token not found');
+    }
+
+    // Add Authorization header
+    const response = await fetch(`/backend-api/conversations?offset=${apiOffset}&limit=${apiLimit}&order=${apiOrder}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch conversations');
+    const data = await response.json();
+
+    // Merge fetched conversations with existing conversations in localStorage
+    const existingConversations = JSON.parse(localStorage.getItem('conversations')) || [];
+    const updatedConversations = mergeConversations(existingConversations, data.items);
+    localStorage.setItem('conversations', JSON.stringify(updatedConversations));
+
+    // Update the UI with the newly updated conversations
+    updateUIWithConversations(updatedConversations);
+    checkAndReplaceText(); // Categorize new items
+    sortLists(); // Sort new items after they have been categorized
+
+    // Update offset and check whether to continue fetching
+    apiOffset += apiLimit;
+    localStorage.setItem('apiOffset', apiOffset); // Save updated offset to localStorage
+
+    // Stop fetching if there are no more items left to fetch
+    if (apiOffset >= data.total) {
+      shouldFetchMore = false; // Set flag to stop further fetching
+      console.log("All conversations have been fetched.");
+    }
+
+  } catch (error) {
+    console.error("Error fetching conversations:", error);
+  } finally {
+    isScriptLoading = false; // Ensure it's reset regardless of success or failure
+  }
+}
+
+// Helper function to merge new conversations into the existing list
+function mergeConversations(existingConversations, newConversations) {
+  const existingIds = new Set(existingConversations.map(conv => conv.id));
+  const mergedConversations = [...existingConversations];
+
+  newConversations.forEach((conversation) => {
+    if (!existingIds.has(conversation.id)) {
+      mergedConversations.push(conversation);
+    }
+  });
+
+  return mergedConversations;
+}
+
+function updateUIWithConversations(conversations) {
+  const container = document.querySelector('#conversations-container'); // Assuming a container exists
   if (!container) {
     console.error('Container not found for conversations.');
     return;
   }
 
-  isLoading = true;
+  container.innerHTML = ''; // Clear existing content before adding new items
 
-  try {
-    offset = parseInt(localStorage.getItem('offset'), 10);
-    console.log(`Fetching conversations with offset=${offset}, limit=${limit}, order=${order}`);
-    const response = await fetch(`/backend-api/conversations?offset=${offset}&limit=${limit}&order=${order}`);
-    if (!response.ok) throw new Error(`Failed to fetch conversations: ${response.statusText}`);
-    const data = await response.json();
-    console.log('Fetched data:', data);
-    waitForContainerToLoad(() => {
-      updateUIWithConversations(data);
-      checkAndReplaceText(); // Categorize new items
-      sortLists(); // Sort new items after they have been categorized
-    });
-  } catch (error) {
-    console.error("Error fetching conversations:", error);
-
-  } finally {
-    offset += limit; // Increment the offset
-    localStorage.setItem('offset', offset); // Save updated offset to localStorage
-    isLoading = false; // Ensure it's reset regardless of success or failure
-  }
-}
-
-function updateUIWithConversations(conversations) {
-  if (conversations) {
+  if (conversations && conversations.length > 0) {
     conversations.forEach((conversation) => {
       const div = document.createElement('div');
       div.className = 'conversation';
@@ -86,49 +163,51 @@ function debounce(func, wait) {
 }
 
 window.addEventListener('scroll', debounce(() => {
-  const container = document.querySelector('#conversations-container');
-  if (!container) return;
-  console.log('Scroll position:', window.innerHeight + window.scrollY, 'Document height:', document.body.offsetHeight);
   if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 10) {
     fetchConversations();
   }
 }, 200));
 
-
+// Initialize the UI with existing conversations in localStorage
+document.addEventListener('DOMContentLoaded', () => {
+  const storedConversations = JSON.parse(localStorage.getItem('conversations')) || [];
+  if (storedConversations.length > 0) {
+    updateUIWithConversations(storedConversations);
+  }
+  fetchConversations(); // Start fetching new conversations
+});
 
 function initializeMutationObserver() {
-  waitForContainerToLoad(() => {
-    const targetNode = document.querySelector('.relative.grow.overflow-hidden.whitespace-nowrap');
-    const config = { childList: true, subtree: true, characterData: true };
+  const targetNode = document.querySelector('.relative.grow.overflow-hidden.whitespace-nowrap');
+  if (!targetNode) return;
 
-    const callback = (mutationsList) => {
-      let isObserving = true;
+  const config = { childList: true, subtree: true, characterData: true };
 
-      for (let mutation of mutationsList) {
-        if (
-          (mutation.type === 'childList' || mutation.type === 'characterData') &&
-          isObserving
-        ) {
-          isObserving = false;
-          try {
-            if (document.body.contains(mutation.target)) {
-              checkAndReplaceText();
-              sortLists(); // Added sortLists to recategorize after mutation
-            }
-          } catch (e) {
-            console.error('Error in mutation callback:', e);
-          } finally {
-            isObserving = true;
+  const callback = (mutationsList) => {
+    let isObserving = true;
+
+    for (let mutation of mutationsList) {
+      if (
+        (mutation.type === 'childList' || mutation.type === 'characterData') &&
+        isObserving
+      ) {
+        isObserving = false;
+        try {
+          if (document.body.contains(mutation.target)) {
+            checkAndReplaceText();
+            sortLists(); // Added sortLists to recategorize after mutation
           }
+        } catch (e) {
+          console.error('Error in mutation callback:', e);
+        } finally {
+          isObserving = true;
         }
       }
-    };
-
-    if (targetNode) {
-      const observer = new MutationObserver(callback);
-      observer.observe(targetNode, config);
     }
-  });
+  };
+
+  const observer = new MutationObserver(callback);
+  observer.observe(targetNode, config);
 }
 
 function repeater() {
@@ -143,6 +222,7 @@ function repeater() {
   const firstSort = setInterval(() => {
     try {
       sortLists();
+      fetchConversations();
     } catch (e) {
       console.error('Error in sortLists interval:', e);
     }
@@ -173,6 +253,8 @@ function repeater() {
     }, 30000);
   }, 20000);
 }
+
+// Setup api calls done //
 
 function checkAndReplaceText() {
   const divElements = document.querySelectorAll(
@@ -236,6 +318,9 @@ function checkAndReplaceText() {
     if (match && match[1]) {
       divElement.closest('li')?.setAttribute('data-category', match[1].trim());
     }
+    if (match && match[1]) {
+      divElement.closest('li')?.setAttribute('data-date',date).setAttribute('data-id', id).setAttribute('data-category', match[1].trim());
+    }
 
     divElement.innerHTML = newText;
   });
@@ -253,8 +338,14 @@ function sortLists() {
   const singleItems = []; // To collect single item categories
   const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
   if (!listContainer) return;
+  // Load saved conversations from localStorage
+
+
+  const storedConversations = JSON.parse(localStorage.getItem('conversations')) || [];
+  console.log("storedConversations: ", storedConversations)
 
   const originalOlLists = listContainer.querySelectorAll('ol');
+
   const olListsToCategorize = Array.from(originalOlLists).slice(1);
 
   // Clear processedItems set to reflect the latest DOM structure
@@ -308,7 +399,10 @@ function sortLists() {
 
   // Create "Uncategorized" section first
   if (uncategorizedItems.length > 0) {
-    const uncategorizedOlContainer = createCategoryContainer('Uncategorized', uncategorizedItems.map(itemObj => itemObj.item));
+    const uncategorizedOlContainer = createCategoryContainer(
+      'Uncategorized',
+      uncategorizedItems.map((itemObj) => itemObj.item)
+    );
     fragment.appendChild(uncategorizedOlContainer);
   }
 
@@ -320,13 +414,20 @@ function sortLists() {
     } else {
       // Store categories along with the earliest date in their items
       const earliestDate = categories[category][0].date;
-      sortedCategories.push({ category, items: categories[category].map(itemObj => itemObj.item), earliestDate });
+      sortedCategories.push({
+        category,
+        items: categories[category].map((itemObj) => itemObj.item),
+        earliestDate,
+      });
     }
   }
 
   // Create a "Single Items" section for all single-item categories
   if (singleItems.length > 0) {
-    const singleItemsOlContainer = createCategoryContainer('Single Items', singleItems.map(itemObj => itemObj.item));
+    const singleItemsOlContainer = createCategoryContainer(
+      'Single Items',
+      singleItems.map((itemObj) => itemObj.item)
+    );
     fragment.appendChild(singleItemsOlContainer);
   }
 
@@ -339,7 +440,11 @@ function sortLists() {
 
   // Create categorized lists based on sorted categories
   sortedCategories.forEach(({ category, items }) => {
-    const newOlContainer = createCategoryContainer(category, items, wordColors[category]);
+    const newOlContainer = createCategoryContainer(
+      category,
+      items,
+      wordColors[category]
+    );
     fragment.appendChild(newOlContainer);
   });
 
@@ -411,7 +516,7 @@ function createCategoryContainer(category, items, color) {
 
 // Function to prioritize today categories
 function prioritizeTodayCategories(categories) {
-  const todayCategories = ['Æther', 'Æ', 'ω', 'Physics']; // Define specific categories that should be prioritized
+  const todayCategories = ['Æther', 'Æ', 'ω']; // Define specific categories that should be prioritized
   const sortedCategories = {};
 
   // First, add all "today" categories in the defined order
@@ -457,189 +562,9 @@ function addCustomCSS() {
   const style = document.createElement('style');
   style.type = 'text/css';
 
-  // Define your CSS code as a string ---> Same scss as found in the separate styling.scss
+  // Define your CSS code as a string ---> Same scss as found in the separate main.scss
   const css = `
-			/* Set the body or main container to 100% width */
-      body, html {
-      	width: 100%;
-      }
 
-      ol {
-          transition: height 0.3s ease, opacity 0.3s ease;
-          overflow: hidden;
-      }
-
-      /* Target the chat container and force it to occupy the full width */
-      .mx-auto, .flex, .flex-1, .gap-4, .text-base, .md, .lg:gap-6, .md, .lg, .xl, .lg, .w-full, .mx-auto {
-      	width: 90% !important;
-      	max-width: 90% !important;
-      	min-width: 90% !important;
-      	padding: 0;
-      }
-
-      h3 {
-      	width: 90% !important;
-      	padding: .5rem 1rem !important;
-        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      	border: 1px dotted ;
-        line-height: .5rem;
-      	background-color: #202;
-      }
-
-      h4 {
-      	color: #64edd3;
-      	width: 90% !important;
-      	border: 1px dotted #fff;
-      	padding: .5rem 1rem !important;
-      	line-height: .5rem;
-      	margin: 0;
-      	background-color: #202;
-        box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-      }
-
-			.max-w-6xl {
-			    max-width: 95%;
-			}
-
-			.prose :where(hr):not(:where(.not-prose)) {
-			    border-top-width: 1px;
-			    margin-bottom: .25em;
-			    margin-top: .25em;
-			}
-
-			.katex-display {
-			    display: block;
-			    margin: 0.25em 0;
-			    text-align: center;
-			}
-
-      div.relative.mt-5 {
-      	h3 {
-          	width: 90% !important;
-          	padding: .25rem 1rem !important;
-            box-shadow: 0 0 20px 0 rgba(14, 0, 18, 0.6);
-            line-height: .5rem;
-          	background-color: #202;
-      	}
-      }
-
-      .flex-row-reverse {
-      	flex-direction: row;
-      }
-
-      .mr-1 .rounded-xl .items-center .text-sm {
-      	color: #f0f;
-      	font-size: 1.25rem;
-      	line-height: 1rem;
-      	border-color: #f0f;
-      }
-
-      .mr-1 .rounded-xl .items-center {
-      	color: #f0f;
-      	border-color: #f0f;
-      }
-
-      .rounded-xl .items-center {
-      	color: #f0f;
-      	border-color: #f0f;
-      }
-
-      .highlighted {
-      	padding: 3px;
-      	margin: -7px 0;
-      	font-weight: bold !important; /* Optionally make it bold */
-      }
-
-      .p-2 {
-      	padding: 0.25rem;
-      }
-
-      .text-sm {
-      	font-size: 0.75rem;
-      	line-height: 1rem;
-      }
-
-      .mx-auto {
-      	// Center the container
-      	margin-left: auto;
-      	margin-right: auto;
-      }
-
-      .flex {
-      	display: flex;
-      }
-
-      .flex-1 {
-      	flex: 1; // Make the container take up available space
-      }
-
-      .gap-4 {
-      	gap: 1rem; // You can tweak this if needed
-      }
-
-      .md\:gap-5 {
-      	@media (min-width: 768px) {
-      		gap: 1.25rem;
-      	}
-      }
-
-      .lg\:gap-6 {
-      	@media (min-width: 1024px) {
-      		gap: 1.5rem;
-      	}
-      }
-
-      .md\:max-w-3xl,
-      .lg\:max-w-\[40rem\],
-      .xl\:max-w-\[48rem\] {
-      	// Remove restrictive maximum widths for wider display
-      	@media (min-width: 768px) {
-      		max-width: 90%;
-      	}
-      }
-
-      // Ensure the container always takes 90% of the available width
-      .group\/conversation-turn {
-      	width: 90%;
-      	margin-left: auto;
-      	margin-right: auto;
-      }
-
-      // Other layout tweaks to ensure consistent appearance
-      .flex-shrink-0 {
-      	flex-shrink: 0;
-      }
-
-      .min-w-0 {
-      	min-width: 0;
-      }
-
-      .items-end {
-      	align-items: flex-end;
-      }
-
-      // Styling for the content, avatar, and chat bubbles, ensuring they are properly aligned and readable
-      .gizmo-bot-avatar {
-      	width: 90%; // Adjust avatar width to 90% of its container (optional, depending on design)
-      }
-
-      // Any additional rules to override padding/margin if necessary
-      .p-1 {
-      	padding: 0.25rem; // Optional: can adjust padding if more/less spacing is desired
-      }
-
-      //._main_5jn6z_1 {
-      //    width: 90% !important;  // Or any desired width value
-      //}
-
-      .custom-width {
-          width: 90% !important;  // Or any desired value
-      }
-
-
-      .mt-5 {
-          margin: 0;
-      }
     `;
 
   // Add the CSS code to the <style> element

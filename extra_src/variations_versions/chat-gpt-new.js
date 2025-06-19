@@ -1,37 +1,43 @@
 (function () {
-  const originalFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const [resource, config] = args;
+  // Wrap the fetch function to capture the auth token
+  if (!window.fetch.isWrapped) {
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+      const [resource, config] = args;
 
-    // Check if headers is a Headers instance or a plain object
-    if (config && config.headers) {
-      let token = null;
+      // Check if headers is a Headers instance or a plain object
+      if (config && config.headers) {
+        let token = null;
 
-      if (config.headers instanceof Headers) {
-        // For Headers object
-        if (config.headers.has('Authorization')) {
-          const authHeader = config.headers.get('Authorization');
-          if (authHeader.startsWith('Bearer ')) {
+        if (config.headers instanceof Headers) {
+          // For Headers object
+          if (config.headers.has('Authorization')) {
+            const authHeader = config.headers.get('Authorization');
+            if (authHeader.startsWith('Bearer ')) {
+              token = authHeader.split(' ')[1];
+            }
+          }
+        } else if (typeof config.headers === 'object') {
+          // For plain object
+          const authHeader = config.headers['Authorization'];
+          if (authHeader && authHeader.startsWith('Bearer ')) {
             token = authHeader.split(' ')[1];
           }
         }
-      } else if (typeof config.headers === 'object') {
-        // For plain object
-        const authHeader = config.headers['Authorization'];
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          token = authHeader.split(' ')[1];
+
+        if (token) {
+          console.log("Captured Bearer token from request:", token);
+          sessionStorage.setItem('authToken', token);
         }
       }
 
-      if (token) {
-        console.log("Captured Bearer token from request:", token);
-        sessionStorage.setItem('authToken', token);
-      }
-    }
+      const response = await originalFetch(...args);
+      return response;
+    };
 
-    const response = await originalFetch(...args);
-    return response;
-  };
+    // Indicate that fetch has been wrapped
+    window.fetch.isWrapped = true;
+  }
 })();
 
 // Initialize by waiting for token
@@ -41,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const storedConversations = JSON.parse(sessionStorage.getItem('conversations')) || [];
   if (storedConversations.length > 0) {
+    console.log("Loaded stored conversations:", storedConversations);
     updateUIWithConversations(storedConversations);
   }
 
@@ -50,7 +57,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Wait for token before fetching conversations
   await waitForToken();
-  fetchConversations().then(repeater());
+  fetchConversations();
+  repeater();
 
 });
 
@@ -58,7 +66,7 @@ const apiLimit = 28; // Matches API's default
 const apiOrder = 'updated';
 let isScriptLoading = false;
 let shouldFetchMore = true; // Initially, allow fetching
-let catagorizedItems = [];
+let categorizedItems = [];
 
 
 // Function to wait until the token is available
@@ -90,7 +98,7 @@ async function fetchConversations() {
       apiOffset = parseInt(sessionStorage.getItem('apiOffset'), 10) || 0;
       console.log('apiOffset : ', apiOffset);
 
-      // Retrieve the token from local storage
+      // Retrieve the token from session storage
       const token = sessionStorage.getItem('authToken');
       if (!token) {
         throw new Error('Bearer token not found');
@@ -105,26 +113,31 @@ async function fetchConversations() {
 
       if (!response.ok) throw new Error('Failed to fetch conversations');
       const data = await response.json();
-      // Retrieve existing conversations from local storage
 
+      console.log('Fetched conversations:', data.items); // Debugging statement
 
-      // Update offset and determine whether to continue fetching
-      apiOffset += apiLimit;
-
-      sessionStorage.setItem('apiOffset', apiOffset);
-
-      updateUIWithConversations(data.items);
-      let existingConversations = managesessionStorage('get');
+      // Retrieve existing conversations from session storage
+      let existingConversations = manageSessionStorage('get');
 
       // Merge and clean new data
       updatedConversations = mergeAndCleanConversations(existingConversations, data.items);
 
-      // Save merged conversations back to local storage
-      managesessionStorage('set', updatedConversations);
+      console.log('Updated conversations after merge and clean:', updatedConversations); // Debugging statement
+
+      // Save merged conversations back to session storage
+      manageSessionStorage('set', updatedConversations);
+
+      // Update offset and determine whether to continue fetching
+      apiOffset += apiLimit;
+      sessionStorage.setItem('apiOffset', apiOffset);
+
       if (apiOffset >= data.total) {
         shouldFetchMore = false;
         console.log("All conversations have been fetched.");
       }
+
+      // Update the UI with new conversations
+      updateUIWithConversations(data.items);
     }
 
     // Update the UI
@@ -138,36 +151,58 @@ async function fetchConversations() {
   }
 }
 
-// Helper function to manage local storage
-function managesessionStorage(action, conversations = []) {
+// Helper function to manage session storage
+function manageSessionStorage(action, conversations = []) {
   const storageKey = 'conversations';
   if (action === 'get') {
-    return JSON.parse(sessionStorage.getItem(storageKey)) || [];
+    const stored = JSON.parse(sessionStorage.getItem(storageKey)) || [];
+    console.log('Retrieved conversations from session storage:', stored); // Debugging statement
+    return stored;
   } else if (action === 'set') {
+    console.log('Saving conversations to session storage:', conversations); // Debugging statement
     sessionStorage.setItem(storageKey, JSON.stringify(conversations));
   }
 }
 
 // Helper function to merge and clean conversations (removes duplicates)
 function mergeAndCleanConversations(existingConversations, newConversations) {
+  console.log('Existing Conversations:', existingConversations);
+  console.log('New Conversations:', newConversations);
+
   const combinedConversations = [...existingConversations, ...newConversations];
-  return removeDuplicates(combinedConversations);
-}
 
-// Helper function to remove duplicates based on the conversation ID
-function removeDuplicates(conversations) {
-  const uniqueConversations = [];
-  const seenIds = new Set();
+  // Deduplicate conversations by checking the unique identifier (e.g., id)
+  const conversationsMap = new Map();
 
-  conversations.forEach((conversation) => {
-    if (!seenIds.has(conversation.id)) {
-      seenIds.add(conversation.id);
-      uniqueConversations.push(conversation);
+  combinedConversations.forEach((conversation) => {
+    const existing = conversationsMap.get(conversation.id);
+
+    // If there's no existing conversation or the new one is more recent, store the new one
+    if (!existing) {
+      conversationsMap.set(conversation.id, conversation);
+    } else {
+      // Compare the update_time to keep the most recent one
+      const existingUpdateTime = new Date(existing.update_time).getTime();
+      const newUpdateTime = new Date(conversation.update_time).getTime();
+
+      if (newUpdateTime > existingUpdateTime) {
+        console.log(`Keeping newer conversation (ID: ${conversation.id}), deleting the older one.`);
+        // Replace the old one with the new one
+        conversationsMap.set(conversation.id, conversation);
+      } else {
+        console.log(`Deleting older conversation (ID: ${conversation.id})`);
+        // Optionally log which conversation is being deleted
+        // If you need to delete, you could do something here (e.g., mark as deleted)
+      }
     }
   });
 
-  return uniqueConversations;
+  // After deduplication, convert the map to an array and return it
+  const cleanedConversations = Array.from(conversationsMap.values());
+  console.log('Cleaned Conversations:', cleanedConversations);
+  return cleanedConversations;
 }
+
 
 function updateUIWithConversations(conversations) {
   const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5'); // Assuming a container exists
@@ -176,7 +211,6 @@ function updateUIWithConversations(conversations) {
     return;
   }
 
-
   // Ensure there's an <ol> element in the container.
   let olElement = container.querySelector('ol:nth-of-type(2)');
   if (!olElement) {
@@ -186,43 +220,12 @@ function updateUIWithConversations(conversations) {
   }
 
   // Clear existing content to prevent duplicates before adding new items
-  olElement.innerHTML = '';
+  // olElement.innerHTML = ''; // Removed to preserve existing items
 
   if (conversations && conversations.length > 0) {
     conversations.forEach((conversation) => {
-      const div = document.createElement('div');
-      div.className = 'conversation';
-      div.textContent = conversation.title; // Replace with appropriate field
-      olElement.appendChild(div);
-    });
-  }
-}
+      console.log('Adding conversation to UI:', conversation); // Debugging statement
 
-
-function updateUIWithStorageConversations(conversations) {
-  const container = document.querySelector('.relative.mt-5.first\\:mt-0.last\\:mb-5');
-
-  if (!container) {
-    console.error('Container not found for conversations.');
-    return;
-  }
-
-
-
-  // Ensure there's an <ol> element in the container.
-  let olElement = container.querySelector('ol:nth-of-type(2)');
-  if (!olElement) {
-    // Create <ol> if it doesn't exist
-    olElement = document.createElement('ol');
-    container.appendChild(olElement);
-  }
-
-  // Clear existing content to prevent duplicates before adding new items
-  olElement.innerHTML = '';
-
-  // Iterate through conversations to create and append <li> elements
-  if (conversations && conversations.length > 0) {
-    conversations.forEach((conversation) => {
       const li = document.createElement('li');
       li.className = "relative z-[15]";
       li.setAttribute("data-testid", `history-item-${conversation.id}`);
@@ -232,14 +235,14 @@ function updateUIWithStorageConversations(conversations) {
         <div class="no-draggable group relative rounded-lg active:opacity-90 bg-token-sidebar-surface-secondary">
           <a class="flex items-center gap-2 p-2" data-discover="true" href="/c/${conversation.id}">
             <div class="relative grow overflow-hidden whitespace-nowrap" dir="auto" title="${conversation.title}">
-              ${conversation.renderedTitle}
+              ${conversation.title}
               <div class="absolute bottom-0 top-0 to-transparent ltr:right-0 ltr:bg-gradient-to-l rtl:left-0 rtl:bg-gradient-to-r from-token-sidebar-surface-secondary w-10 from-60%"></div>
             </div>
           </a>
           <div class="absolute bottom-0 top-0 items-center gap-1.5 pr-2 ltr:right-0 rtl:left-0 flex">
             <span class="" data-state="closed">
               <button class="flex items-center justify-center text-token-text-secondary transition hover:text-token-text-primary radix-state-open:text-token-text-secondary" data-testid="history-item-${conversation.id}-options" type="button" id="radix-:r23:" aria-haspopup="menu" aria-expanded="false" data-state="closed">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                   <path fill-rule="evenodd" clip-rule="evenodd" d="M3 12C3 10.8954 3.89543 10 5 10C6.10457 10 7 10.8954 7 12C7 13.1046 6.10457 14 5 14C3.89543 14 3 13.1046 3 12ZM10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12ZM17 12C17 10.8954 17.8954 10 19 10C20.1046 10 21 10.8954 21 12C21 13.1046 20.1046 14 19 14C17.8954 14 17 13.1046 17 12Z" fill="currentColor"></path>
                 </svg>
               </button>
@@ -267,9 +270,8 @@ window.addEventListener('scroll', debounce(() => {
   }
 }, 200));
 
-
-
 function initializeMutationObserver() {
+
   const targetNode = document.querySelector('.relative.grow.overflow-hidden.whitespace-nowrap');
   if (!targetNode) return;
 
@@ -277,7 +279,10 @@ function initializeMutationObserver() {
 
   const callback = (mutationsList) => {
     let isObserving = true;
-
+    mutationsList.forEach((mutation) => {
+      console.log('Mutation observed:', mutation);
+      // Check the affected nodes
+    });
     for (let mutation of mutationsList) {
       if (
         (mutation.type === 'childList' || mutation.type === 'characterData') &&
@@ -298,7 +303,9 @@ function initializeMutationObserver() {
     }
   };
 
+  // Start observing
   const observer = new MutationObserver(callback);
+  observer.observe(document.body, { childList: true, subtree: true });
   observer.observe(targetNode, config);
 }
 
@@ -346,7 +353,7 @@ function repeater() {
   }, 20000);
 }
 
-// Setup api calls done //
+// Setup API calls done //
 
 function checkAndReplaceText() {
   const divElements = document.querySelectorAll(
@@ -406,9 +413,14 @@ function checkAndReplaceText() {
       return `<span class="highlighted" style="color: ${wordColors[word]}; border: 1px dotted ${wordColors[word]}">${word}</span>`;
     });
 
+    // Reset regex lastIndex to 0 to search from the beginning
+    regex.lastIndex = 0;
     const match = regex.exec(textContent);
     if (match && match[1]) {
       divElement.closest('li')?.setAttribute('data-category', match[1].trim());
+      console.log(`Assigned category '${match[1].trim()}' to an item.`); // Debugging statement
+    } else {
+      console.warn('No category found in text:', textContent); // Debugging statement
     }
 
     divElement.innerHTML = newText;
@@ -421,19 +433,21 @@ function checkAndReplaceText() {
   }
 }
 
-
 function sortLists() {
   const categories = {};
   const uncategorizedItems = [];
   const singleItems = []; // To collect single item categories
   const listContainer = document.querySelector('.flex.flex-col.gap-2.pb-2');
-  if (!listContainer) return;
+  if (!listContainer) {
+    console.error('List container not found.'); // Debugging statement
+    return;
+  }
 
   const originalOlLists = listContainer.querySelectorAll('ol');
   const olListsToCategorize = Array.from(originalOlLists);
 
   // Clear processedItems set to reflect the latest DOM structure
-  const processedItems = new Set();
+  // Removed processedItems logic to avoid skipping items
   let wordColors = {};
 
   try {
@@ -445,9 +459,6 @@ function sortLists() {
   olListsToCategorize.forEach((ol) => {
     const listItems = ol.querySelectorAll('li');
     listItems.forEach((item) => {
-
-      if (processedItems.has(item)) return;
-
       const category = item.getAttribute('data-category');
       const dateStr = item.getAttribute('data-date');
       const date = dateStr ? new Date(dateStr) : null;
@@ -458,10 +469,10 @@ function sortLists() {
       } else {
         uncategorizedItems.push({ item, date });
       }
-
-      processedItems.add(item);
     });
   });
+
+  console.log('Categories before sorting:', categories); // Debugging statement
 
   // Sort items within categories by date (ascending order)
   for (const category in categories) {
@@ -484,6 +495,7 @@ function sortLists() {
 
   // Create "Uncategorized" section first
   if (uncategorizedItems.length > 0) {
+    console.log('Creating "Uncategorized" category with items:', uncategorizedItems); // Debugging statement
     const uncategorizedOlContainer = createCategoryContainer(
       'Uncategorized',
       uncategorizedItems.map((itemObj) => itemObj.item)
@@ -509,6 +521,7 @@ function sortLists() {
 
   // Create a "Single Items" section for all single-item categories
   if (singleItems.length > 0) {
+    console.log('Creating "Single Items" category with items:', singleItems); // Debugging statement
     const singleItemsOlContainer = createCategoryContainer(
       'Single Items',
       singleItems.map((itemObj) => itemObj.item)
@@ -516,39 +529,28 @@ function sortLists() {
     fragment.appendChild(singleItemsOlContainer);
   }
 
-// Sort categories by the earliest date among their items (ascending order)
+  // Sort categories by the earliest date among their items
   sortedCategories.sort((a, b) => {
-    const dateA = a.earliestDate || new Date(0); // Fallback to earliest possible date if undefined
-    const dateB = b.earliestDate || new Date(0);
-    return dateB - dateA; // For descending order, use `dateB - dateA`
+    if (!a.earliestDate) return 1;
+    if (!b.earliestDate) return -1;
+    return a.earliestDate - b.earliestDate;
   });
 
-  console.log("Sorted categories by earliest date:", sortedCategories);
-
-
-// Create categorized lists based on sorted categories and append them in order
+  // Create categorized lists based on sorted categories
   sortedCategories.forEach(({ category, items }) => {
+    console.log(`Creating category '${category}' with items:`, items); // Debugging statement
     const newOlContainer = createCategoryContainer(
-        category,
-        items,
-        wordColors[category]
+      category,
+      items,
+      wordColors[category]
     );
     fragment.appendChild(newOlContainer);
   });
 
-// Now append the fragment to the DOM
-  if (listContainer) {
-    listContainer.innerHTML = ''; // Clear existing content
-    listContainer.appendChild(fragment); // Append sorted categories
-  }
+  // Clear the listContainer
+  listContainer.innerHTML = '';
 
-  // Clear all existing <ol> elements from the container, except the first one
-  listContainer.querySelectorAll('ol').forEach((ol, index) => {
-    if (index > 0) {
-      ol.parentElement?.remove();
-    }
-  });
-
+  // Now append the new sorted lists
   listContainer.appendChild(fragment);
 
   // Reinitialize button listeners and dropdowns after sorting
@@ -573,9 +575,9 @@ function createCategoryContainer(category, items, color) {
   // Add collapsibility to the category header
   const collapseIcon = document.createElement('span');
   let isCollapsed = true;
-  JSON.parse(localStorage.getItem(`categoryState_${category}`)) === undefined
-    ? localStorage.setItem(`categoryState_${category}`, JSON.stringify(true))
-    : isCollapsed = JSON.parse(localStorage.getItem(`categoryState_${category}`));
+  JSON.parse(sessionStorage.getItem(`categoryState_${category}`)) === undefined
+    ? sessionStorage.setItem(`categoryState_${category}`, JSON.stringify(true))
+    : isCollapsed = JSON.parse(sessionStorage.getItem(`categoryState_${category}`));
   collapseIcon.textContent = isCollapsed ? '[+]' : '[-]';
   collapseIcon.style.marginRight = '10px';
   collapseIcon.style.cursor = 'pointer';
@@ -586,10 +588,8 @@ function createCategoryContainer(category, items, color) {
   const newOl = document.createElement('ol');
   newOl.style.display = isCollapsed ? 'none' : 'block';
   items.forEach((item) => {
-    if (document.body.contains(item)) {
-      // Check if item is still in DOM
-      newOl.appendChild(item);
-    }
+    // Append item regardless of whether it's in the DOM
+    newOl.appendChild(item);
   });
 
   // Toggle collapse/expand on click
@@ -597,11 +597,11 @@ function createCategoryContainer(category, items, color) {
     if (newOl.style.display === 'none') {
       newOl.style.display = 'block';
       collapseIcon.textContent = '[-]';
-      localStorage.setItem(`categoryState_${category}`, JSON.stringify(false));
+      sessionStorage.setItem(`categoryState_${category}`, JSON.stringify(false));
     } else {
       newOl.style.display = 'none';
       collapseIcon.textContent = '[+]';
-      localStorage.setItem(`categoryState_${category}`, JSON.stringify(true));
+      sessionStorage.setItem(`categoryState_${category}`, JSON.stringify(true));
     }
   });
   newOlContainer.appendChild(newOl);
@@ -656,7 +656,7 @@ function addCustomCSS() {
   const style = document.createElement('style');
   style.type = 'text/css';
 
-  // Define your CSS code as a string ---> Same scss as found in the separate styling.scss
+  // Define your CSS code as a string ---> Same scss as found in the separate catagorizer.scss
   const css = `
 
     `;
