@@ -53,6 +53,7 @@
   background: #606;
   padding: 6px 10px;
   font-weight: bold;
+  width: 320px;
   color: #f4f;
   user-select: none;
   display: flex;
@@ -61,10 +62,10 @@
 }
 #chat-tree-toggle {
   font-weight: bold;
-  border: none;
+  border: 3px solid #909;
   background: none;
   color: #0f0;
-  font-size: 16px;
+  font-size: 24px;
   cursor: pointer;
 }
 

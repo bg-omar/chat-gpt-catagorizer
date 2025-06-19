@@ -2,36 +2,55 @@ const dragable = true;
 const savedPos = localStorage.getItem('chatTreePos');
 function getConversationIdHash() {
     const path = window.location.pathname;
-    const match = path.match(/g-p-([a-f0-9]{32})/);
-    return match ? match[1] : 'unknown';
+    const match = path.match(/\/c\/([a-f0-9-]{36})/);
+    return match ? match[1] : null;
 }
+
 
 let conversationId = getConversationIdHash();
-
-console.log("%c 1 --> Line: 4||HistorTreeNodes.js\n conversationId: ","color:#f0f;", conversationId);
-
-function loadTree() {
-    const data = localStorage.getItem(`chatTree_${conversationId}`);
-    return data ? JSON.parse(data) : [];
+let storedTree = loadTree();
+if (!storedTree.turns || storedTree.turns.length === 0) {
+    console.warn('🔍 No stored tree found — running auto-scan fallback.');
+    detectEditedTurns(); // or your existing scanning function
 }
 
-// Save entire tree structure with forks
+console.log("%c  --> conversationId: ","color:#f0f;", conversationId);
+console.log("%c  --> storedTree: ","color:#f0f;", storedTree);
+function loadTree() {
+    const data = localStorage.getItem(`chatTree_${conversationId}`);
+    return data ? JSON.parse(data) : { turns: [] };
+}
+
+
 function saveTree(turns, editedIdSet) {
-    const treeData = turns.map(turn => {
+    const existing = loadTree();
+    const existingMap = new Map(existing.turns?.map(t => [t.testId, t]));
+
+    const turnsData = turns.map(turn => {
         const testId = turn.getAttribute('data-testid');
         const userMessages = Array.from(turn.querySelectorAll('[data-message-author-role="user"]'))
             .map(m => m.innerText.trim())
             .filter(Boolean);
 
+        const old = existingMap.get(testId) || {};
         return {
             testId,
             versions: userMessages,
             isEdited: editedIdSet.has(testId),
+            forkOpen: old.forkOpen ?? true,
+            forkSummary: old.forkSummary ?? undefined,
         };
     });
 
-    localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(treeData));
+    const treeObject = {
+        updated: new Date().toISOString(),
+        turns: turnsData
+    };
+
+    localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(treeObject));
 }
+
+
 
 
 
@@ -59,8 +78,18 @@ document.addEventListener('DOMContentLoaded', () => {
     repeater();
     const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
     globalTurns = turns;
-    const editedIdSet = new Set(); // you might want to re-detect here or store separately
-    buildTree(turns, editedIdSet);
+
+    // 🧠 Build from stored tree immediately if available
+    const storedTree = loadTree();
+    const treeTurns = storedTree?.turns || [];
+
+    if (treeTurns.length) {
+        const editedIdSet = new Set(
+            treeTurns.filter(item => item.isEdited).map(item => item.testId)
+        );
+        buildTree(turns, editedIdSet, treeTurns);
+    }
+
 });
 
 
@@ -253,9 +282,11 @@ function getNodes() {
                     if (isEdited) {
                         const fork = document.createElement('details');
                         fork.className = 'chat-tree-fork';
+
                         const forkKey = `chatTreeFork-open-${userTurnCount}`;
                         const forkState = localStorage.getItem(forkKey);
-                        fork.open = forkState !== 'false';
+                        fork.open = forkState === null ? true : forkState === 'true';
+
                         fork.addEventListener('toggle', () => {
                             localStorage.setItem(forkKey, fork.open.toString());
                         });
@@ -268,6 +299,7 @@ function getNodes() {
                     } else {
                         list.appendChild(item);
                     }
+
                 } else {
                     const empty = document.createElement('li');
                     empty.className = 'chat-tree-empty';
@@ -312,18 +344,17 @@ function getNodes() {
     }, 1000);
 }
 
-function buildTree(turns, editedIdSet) {
+function buildTree(turns, editedIdSet, storedTurns = []) {
     const content = document.getElementById('chat-tree-content');
     if (!content) return;
 
     const oldList = content.querySelector('ul');
     if (oldList) oldList.remove();
 
-    const storedTree = loadTree();
     const list = document.createElement('ul');
     let userTurnCount = 0;
 
-    storedTree.forEach((itemData, i) => {
+    storedTurns.forEach((itemData, i) => {
         const { testId, versions = [], isEdited, forkOpen, forkSummary } = itemData;
         const turn = turns.find(t => t.getAttribute('data-testid') === testId);
         const userMessage = versions[versions.length - 1]; // current version
@@ -347,11 +378,16 @@ function buildTree(turns, editedIdSet) {
 
             const fork = document.createElement('details');
             fork.className = 'chat-tree-fork';
-            fork.open = forkOpen ?? true;
+            fork.open = typeof forkOpen === 'boolean' ? forkOpen : true;
+
 
             fork.addEventListener('toggle', () => {
                 itemData.forkOpen = fork.open;
-                localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(storedTree));
+                const fullTree = loadTree();
+                const treeMap = new Map(fullTree.turns.map(t => [t.testId, t]));
+                treeMap.set(testId, itemData);
+                fullTree.turns = Array.from(treeMap.values());
+                localStorage.setItem(`chatTree_${conversationId}`, JSON.stringify(fullTree));
             });
 
             const forkLabel = document.createElement('summary');
@@ -396,6 +432,7 @@ conversationId = getConversationIdHash();
 const CHAT_TREE_ID = 'chat-tree-panel';
 
 let rebuildQueued = false;
+
 function queueBuild() {
     if (rebuildQueued) return;
     rebuildQueued = true;
@@ -403,33 +440,47 @@ function queueBuild() {
     requestAnimationFrame(() => {
         rebuildQueued = false;
 
-        /* ➊ refresh ID in case the URL changed without a full reload */
+        // 🔁 ➊ Refresh conversation ID if URL changed
         conversationId = getConversationIdHash();
 
-        /* ➋ collect turns & rebuild */
-        const turns = Array.from(
-            document.querySelectorAll('[data-testid^="conversation-turn-"]')
+        // 🔄 ➋ Load full stored tree object
+        const storedTree = loadTree();
+        const storedTurns = storedTree.turns || [];
+
+        // 🧠 Build edited ID set from stored data
+        const editedIdSet = new Set(
+            storedTurns.filter(item => item.isEdited).map(item => item.testId)
         );
-        globalTurns = turns;                 // keep your global in sync
-        const editedIdSet = new Set();       // or call your scan routine
-        buildTree(turns, editedIdSet);
+
+        // 🧱 ➌ Re-collect live DOM turns
+        const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+        globalTurns = turns;
+
+        // 🌳 ➍ Build tree from stored data + DOM
+        buildTree(turns, editedIdSet, storedTurns);
     });
 }
 
 /* one global observer --------------------------------------------------- */
 const observer = new MutationObserver((records) => {
-    /* Ignore mutations when *every* target lives inside our own panel */
+    // Ignore mutations if everything happened inside our panel
     const onlyInsidePanel = records.every(r =>
         r.target.closest('#' + CHAT_TREE_ID)
     );
     if (onlyInsidePanel) return;
 
-    /* Something outside changed – schedule rebuild */
+    // Something changed elsewhere – rebuild the tree
     queueBuild();
 });
 
-/* start watching once – reuse for the whole tab */
-observer.observe(document.body, { childList: true, subtree: true });
+/* Start watching once the DOM is ready */
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        observer.observe(document.body, { childList: true, subtree: true });
+    });
+} else {
+    observer.observe(document.body, { childList: true, subtree: true });
+}
 
 
 function makeDraggable(element) {
@@ -495,4 +546,3 @@ function makeDraggable(element) {
 
 
 }
-
