@@ -1,41 +1,41 @@
-let enableEquationEnv = true;
-let enableBlockBrackets = true;
-let enableInlineParens = true;
-let enableDoubleDollar = true;
+let enableEquationEnv = false;
+let enableBlockBrackets = false;
+let enableInlineParens = false;
+let enableDoubleDollar = false;
 let enableSingleDollar = false; // optional, if added
 
 
-let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || true; // Default state
-let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
+let isLatexScriptEnabled = JSON.parse(sessionStorage.getItem('isLatexScriptEnabled')) || false; // Default state
 
 const derenderButton = document.createElement('button');
 const scriptButton = document.createElement('button');
 
-const style = document.createElement('style');
-style.textContent = `
-  .katex {
-    font-size: 1.2em;
-    line-height: 1.5;
-  }
-
-  .katex-display {
-    margin: 1em 0;
-    text-align: center;
-  }
-`;
-document.head.appendChild(style);
+// const style = document.createElement('style');
+// style.textContent = `
+//   .katex {
+//     font-size: 1.2em;
+//     line-height: 1.5;
+//   }
+//
+//   .katex-display {
+//     margin: 1em 0;
+//     text-align: center;
+//   }
+// `;
+// document.head.appendChild(style);
 
 document.addEventListener('DOMContentLoaded', () => {
   initializeButtons();
   repeater();
 });
 
+
 function repeater() {
   const latexInterval = setInterval(async () => {
-    if (!isScriptEnabled) return; // Skip execution if paused
+    if (!isLatexScriptEnabled) return; // Skip execution if paused
     try {
       await getStates();
-      await toggleLaTeXRendering();
+      await renderLaTeX();
       await setStates();
     } catch (e) {
       console.error('Error in latex interval:', e);
@@ -44,13 +44,12 @@ function repeater() {
 }
 
 function getStates() {
-  isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled'));
-  renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')); // Default state
+  isLatexScriptEnabled = JSON.parse(sessionStorage.getItem('isLatexScriptEnabled'));
 }
 
 function setStates() {
-  sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
-  sessionStorage.setItem('renderLatexEnabled', JSON.stringify(renderLatexEnabled));
+  isLatexScriptEnabled = (enableEquationEnv || enableBlockBrackets || enableInlineParens || enableDoubleDollar || enableSingleDollar);
+  sessionStorage.setItem('isLatexScriptEnabled', JSON.stringify(isLatexScriptEnabled));
 }
 
 // Function to render LaTeX equations using KaTeX
@@ -58,7 +57,7 @@ function renderLaTeX() {
   const blockRegex = /\\\[\s*(.*?)\s*\\\]/g;
   const inlineRegex = /\\\(\s*(.*?)\s*\\\)/g;
   const doubleDollarRegex = /\$\$\s*(.*?)\s*\$\$/g;
-  const equationEnvRegex = /\\begin\{equation\*?\}([\s\S]*?)\\end\{equation\*?\}/g;
+  const equationEnvRegex = /\\begin\{equation(\*?)\}([\s\S]*?)\\end\{equation\1\}/g;
 
   const textNodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node;
@@ -71,10 +70,19 @@ function renderLaTeX() {
     let updatedText = text;
 
     if (enableEquationEnv) {
-        updatedText = updatedText.replace(equationEnvRegex, (_, latex) => {
+        updatedText = updatedText.replace(equationEnvRegex, (_, star, latex) => {
+        // Ignore if inside a button element
+        let parentElem = node.parentNode;
+        while (parentElem) {
+          if (parentElem.tagName === 'BUTTON') {
+            return match;
+          }
+          parentElem = parentElem.parentNode;
+        }
+
           const div = document.createElement("div");
           try {
-            div.setAttribute("data-original", `\\begin\{equation\*?\}${latex}\\end\{equation\*?\}`);
+            div.setAttribute("data-original", `\\begin{equation${star}}${latex}\\end{equation${star}}`);
             katex.render(latex.trim(), div, { displayMode: true });
             return div.outerHTML;
           } catch (error) {
@@ -86,6 +94,15 @@ function renderLaTeX() {
 
     if(enableBlockBrackets){
       updatedText = updatedText.replace(blockRegex, (_, latex) => {
+        // Ignore if inside a button element
+        let parentElem = node.parentNode;
+        while (parentElem) {
+          if (parentElem.tagName === 'BUTTON') {
+            return match;
+          }
+          parentElem = parentElem.parentNode;
+        }
+
         const div = document.createElement("div");
         try {
           div.setAttribute("data-original", `\\[${latex}\\]`);
@@ -100,6 +117,15 @@ function renderLaTeX() {
 
     if(enableInlineParens){
       updatedText = updatedText.replace(inlineRegex, (_, latex) => {
+        // Ignore if inside a button element
+        let parentElem = node.parentNode;
+        while (parentElem) {
+          if (parentElem.tagName === 'BUTTON') {
+            return match;
+          }
+          parentElem = parentElem.parentNode;
+        }
+
         const span = document.createElement("span");
         try {
           span.setAttribute("data-original", `\\(${latex}\\)`);
@@ -114,13 +140,65 @@ function renderLaTeX() {
 
     if(enableDoubleDollar){
       updatedText = updatedText.replace(doubleDollarRegex, (_, latex) => {
+        // Ignore if inside a button element
+        let parentElem = node.parentNode;
+        while (parentElem) {
+          if (parentElem.tagName === 'BUTTON') {
+            return match;
+          }
+          parentElem = parentElem.parentNode;
+        }
+
         const span = document.createElement("span");
         try {
           span.setAttribute("data-original", `$$${latex}$$`);
-          katex.render(latex, span, { displayMode: true });
+          katex.render(latex, span, { displayMode: false });
           return span.outerHTML;
         } catch (error) {
           console.error("KaTeX Double Dollar Render Error:", error, latex);
+          return `Error: ${latex}`;
+        }
+      });
+    }
+
+    if(enableSingleDollar){
+      updatedText = updatedText.replace(/\$(.+?)\$/g, (match, latex, offset, string) => {
+        // Ignore if inside a double dollar sign block
+        const doubleDollarBefore = string.lastIndexOf('$$', offset);
+        const doubleDollarAfter = string.indexOf('$$', offset + match.length);
+        if (doubleDollarBefore !== -1 && doubleDollarAfter !== -1 && doubleDollarBefore < offset && doubleDollarAfter > offset) {
+          return match;
+        }
+
+        // Ignore if inside a button element
+        let parentElem = node.parentNode;
+        while (parentElem) {
+          if (parentElem.tagName === 'BUTTON') {
+            return match;
+          }
+          parentElem = parentElem.parentNode;
+        }
+
+        // Find the start and end of the match
+        const before = string.slice(0, offset);
+        const after = string.slice(offset + match.length);
+
+        // Check if there is a sentence-ending punctuation before or after the match
+        const sentenceEndBefore = /[.!?]\s*$/.test(before);
+        const sentenceEndAfter = /^\s*[.!?]/.test(after);
+
+        if (sentenceEndBefore || sentenceEndAfter) {
+          // Do not render if the match crosses a sentence boundary
+          return match;
+        }
+
+        const span = document.createElement("span");
+        try {
+          span.setAttribute("data-original", `$${latex}$`);
+          katex.render(latex, span, { displayMode: false });
+          return span.outerHTML;
+        } catch (error) {
+          console.error("KaTeX Single Dollar Render Error:", error, latex);
           return `Error: ${latex}`;
         }
       });
@@ -150,19 +228,8 @@ function derenderLaTeX() {
 
   console.log('De-rendered all LaTeX elements.');
 }
-function toggleLaTeXRendering() {
-  if (renderLatexEnabled) {
-    renderLaTeX();
-  } else {
-    derenderLaTeX();
-  }
-}
 
 function initializeButtons() {
-  derenderButton.style.cssText = getButtonStyles();
-  derenderButton.textContent = `${renderLatexEnabled ? 'rendered' : 'de-rendered'}`;
-  derenderButton.addEventListener('click', () => toggleState('renderLatexEnabled', derenderButton));
-
   // Create container for the buttonsD
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = `
@@ -173,32 +240,16 @@ function initializeButtons() {
     gap: 10px;
   `;
 
-
-
   scriptButton.style.cssText = getButtonStyles();
-  scriptButton.textContent = `LaTeX: ${isScriptEnabled ? 'on' : 'off'}`;
-  scriptButton.addEventListener('click', () => toggleState('isScriptEnabled', scriptButton));
-
+  scriptButton.textContent = `De-render`;
+  scriptButton.addEventListener('click', () =>  derenderLaTeX());
 
   // Append buttons to the container
-  buttonContainer.appendChild(derenderButton);
   buttonContainer.appendChild(scriptButton);
-
-  function createToggleButton(label, variableRef, callback) {
-    const btn = document.createElement('button');
-    btn.style.cssText = getButtonStyles();
-    btn.textContent = `${label}: ${variableRef.value ? 'on' : 'off'}`;
-    btn.addEventListener('click', () => {
-      variableRef.value = !variableRef.value;
-      btn.textContent = `${label}: ${variableRef.value ? 'on' : 'off'}`;
-      if (callback) callback();
-    });
-    return btn;
-  }
 
   const toggleRefs = [
     {
-      label: 'Equation Env',
+      label: '{Eq}',
       ref: {
         get value() { return enableEquationEnv; },
         set value(v) { enableEquationEnv = v; }
@@ -241,9 +292,22 @@ function initializeButtons() {
     buttonContainer.appendChild(btn);
   });
 
-
   // Add the container to the document body
   document.body.appendChild(buttonContainer);
+}
+
+function createToggleButton(label, ref, callback) {
+  const btn = document.createElement('button');
+  btn.style.cssText = getButtonStyles(ref.value);
+  btn.textContent = label;
+
+  btn.addEventListener('click', () => {
+    ref.value = !ref.value;
+    btn.style.cssText = getButtonStyles(ref.value);
+    if (callback) callback();
+  });
+
+  return btn;
 }
 
 
@@ -252,9 +316,7 @@ function toggleState(stateKey, button) {
   const currentState = JSON.parse(sessionStorage.getItem(stateKey));
   const newState = !currentState;
 
-    if (stateKey === 'renderLatexEnabled') {
-        button.textContent = `${newState ? 'rendered' : 'de-rendered'}`;
-    } else if (stateKey === 'isScriptEnabled') {
+    if (stateKey === 'isLatexScriptEnabled') {
         button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
     } else {
         // Default behavior for other buttons
@@ -265,17 +327,17 @@ function toggleState(stateKey, button) {
 }
 
 // Function to get button styles
-function getButtonStyles() {
+function getButtonStyles(isActive = false) {
   return `
     padding: 2px;
-    background-color: #22002244;
-    color: #ffffffaa;
+    color: ${isActive ? '#ffffffaa' : '#aaaaaaaa'};
+    background-color: ${isActive ? '#551155aa' : '#22002222'};
     border: 1px solid #cccccc66;
     justify-self: stretch;
     text-align: center;
     border-radius: 5px;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 8px;
   `;
 }
 
