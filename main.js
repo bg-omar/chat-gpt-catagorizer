@@ -1,4 +1,3 @@
-let renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled')) || false; // Default state
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
 let isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isNavScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
@@ -14,9 +13,7 @@ let apiOffset = 0;
 let isPaused = false;
 let pauseTimeout = null;
 let pauseTimeLeft = 30; // Countdown in seconds
-let latexInterval;
 let firstSort;
-let latexAvailable = true;
 let stateSetting = true;
 let projectId = extractProjectId();
 let projectCategorized = false;
@@ -26,17 +23,14 @@ let pageIsProject = false;
 let projectScroll = 0;
 let projectScrollStart = 0;
 
-let globalTurns = [];
-let globalEditedIdSet = new Set();
-const dragable = false;
+
 const offsetAmount = document.createElement('div');
 const derenderButton = document.createElement('button');
 const pauseButton = document.createElement('button');
 const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
-let chatTreeObserver = null;
-// Function to dynamically load KaTeX CSS and JS
+
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -135,7 +129,6 @@ function getStates() {
     isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isNavScrollEnabled'));
     isSortListsEnabled = JSON.parse(sessionStorage.getItem('isSortListsEnabled'));
     sortListTriggered = JSON.parse(sessionStorage.getItem('sortListsTriggered'));
-    renderLatexEnabled = JSON.parse(sessionStorage.getItem('renderLatexEnabled'));
     apiOffset = JSON.parse(sessionStorage.getItem('apiOffset'));
     dataTotal = JSON.parse(sessionStorage.getItem('dataTotal'));
     cursorTotal = JSON.parse(sessionStorage.getItem(`cursor`)) || {};
@@ -163,7 +156,6 @@ function setStates() {
   sessionStorage.setItem('isScriptEnabled', JSON.stringify(isScriptEnabled));
   sessionStorage.setItem('isNavScrollEnabled', JSON.stringify(isNavScrollEnabled));
   sessionStorage.setItem('isSortListsEnabled',JSON.stringify(isSortListsEnabled));
-  sessionStorage.setItem('renderLatexEnabled',JSON.stringify(renderLatexEnabled));
 
   // Update the button text to match the state
   sortListsButton.textContent = `Sort: ${isSortListsEnabled}`;
@@ -172,17 +164,6 @@ function setStates() {
 
 // = REPEATER
 function repeater() {
-  if (latexAvailable) {
-    latexInterval = setInterval(async () => {
-      if (!isScriptEnabled) return;
-      try {
-        await toggleLaTeXRendering();
-      } catch (e) {
-        console.error('Error in latex interval:', e);
-      }
-    }, 100);
-  }
-
   setTimeout(() => {
     document.querySelectorAll('div.absolute.bottom-0.top-0.inline-flex').forEach(div => {
       div.classList.remove('invisible');
@@ -192,36 +173,10 @@ function repeater() {
 
   firstSort = setInterval(async () => {
 
-    const interval = setInterval(async () => {
-      const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
-      const alreadyInjected = document.getElementById('chat-tree-panel');
-      if (chatReady && !alreadyInjected) {
-        clearInterval(interval); // ✅ Stop checking once ready
-        try {
-          getNodes(); // ✅ Run tree builder once
-        } catch (e) {
-          console.error('Error in chat tree injection:', e);
-        }
-      }
-    }, 200); // ⏱️ Adjust as needed
-
-    // Reload tree when navigating to a new conversation
-    if (!chatTreeObserver) {
-      chatTreeObserver = new MutationObserver(() => {
-        const alreadyInjected = document.getElementById('chat-tree-panel');
-        const chatReady = document.querySelector('[data-testid^="conversation-turn-"]');
-        if (chatReady && !alreadyInjected) {
-          getNodes();
-        }
-      });
-
-      chatTreeObserver.observe(document.body, { childList: true, subtree: true });
-    }
-
     if (isPaused) return; // Skip execution if paused
     try {
       await getStates();
-      await waitForElement('div.bg-token-sidebar-surface-primary nav div.flex-col.flex-1.transition-opacity.duration-500.relative.pe-3.overflow-y-auto');
+      await waitForElement('#history > aside');
 
       if (apiOffset <= dataTotal) {
         await scrollAndEvent(300, 'nav');
@@ -771,21 +726,6 @@ function getRelativeDateCategory(dateStr) {
 }
 
 
-function toggleLaTeXRendering() {
-  if (renderLatexEnabled) {
-    renderLaTeX();
-  } else {
-    const hasLatex = document.querySelector('[data-original]') !== null;
-    if (hasLatex) {
-      derenderLaTeX();
-      latexAvailable = true;
-    } else {
-      clearInterval(latexInterval); // Stop the interval if there's no LaTeX left
-      latexAvailable = false;
-    }
-  }
-}
-
 async function scrollAndEvent(amount, container = 'nav') {
   let scrollContainer;
 
@@ -1106,14 +1046,6 @@ function reinitializeDropdowns() {
 
 
 function initializeButtons() {
-  derenderButton.style.cssText = getButtonStyles();
-  derenderButton.textContent = `LaTeX: ${renderLatexEnabled ? 'on' : 'off'}`;
-  derenderButton.addEventListener('click', () =>{
-        toggleState('renderLatexEnabled', derenderButton);
-        latexAvailable = true;
-      }
-  );
-
   // Create container for the buttonsD
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = `
@@ -1210,12 +1142,9 @@ function toggleState(stateKey, button) {
   const currentState = JSON.parse(sessionStorage.getItem(stateKey));
   const newState = !currentState;
 
-  if (stateKey === 'renderLatexEnabled') {
-    button.textContent = `LaTeX: ${newState ? 'on' : 'off'}`;
-  } else {
-    // Default behavior for other buttons
-    button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
-  }
+  // Default behavior for other buttons
+  button.textContent = `${formatStateKey(stateKey)}: ${newState}`;
+
   sessionStorage.setItem(stateKey, JSON.stringify(newState));
   console.log(`${stateKey}:`, newState);
 }
@@ -1307,376 +1236,15 @@ function handleButtonClick(button) {
   }
 }
 
-// Function to render LaTeX equations using KaTeX
-function renderLaTeX() {
-  const blockRegex = /\\\[\s*(.*?)\s*\\\]/g; // Matches \[ ... \]
-  const inlineRegex = /\\\(\s*(.*?)\s*\\\)/g; // Matches \( ... \]
-  const dollarRegex = /\$\s*(.*?)\s*\$/g; // Matches $ ... $
-  const doubleDollarRegex = /\$\$\s*(.*?)\s*\$\$/g; // Matches $$ ... $$
-
-  const textNodes = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT
-  );
-  let node;
-
-  while ((node = textNodes.nextNode())) {
-    const parent = node.parentNode;
-
-    // Skip if already rendered by KaTeX
-    if (parent.tagName === 'SPAN' && parent.classList.contains('katex'))
-      continue;
-
-    let text = node.nodeValue;
-    let updatedText = text;
-
-    // Replace LaTeX expressions
-    updatedText = updatedText.replace(blockRegex, (_, latex) => {
-      const div = document.createElement('div');
-      try {
-        div.setAttribute('data-original', `\\[${latex}\\]`); // Store original LaTeX
-        katex.render(latex, div, { displayMode: true });
-        return div.outerHTML;
-      } catch (error) {
-        console.error('KaTeX Block Render Error:', error, latex);
-        return `Error: ${latex}`;
-      }
-    });
-
-    updatedText = updatedText.replace(inlineRegex, (_, latex) => {
-      const span = document.createElement('span');
-      try {
-        span.setAttribute('data-original', `\\(${latex}\\)`); // Store original LaTeX
-        katex.render(latex, span, { displayMode: false });
-        return span.outerHTML;
-      } catch (error) {
-        console.error('KaTeX Inline Render Error:', error, latex);
-        return `Error: ${latex}`;
-      }
-    });
-
-    updatedText = updatedText.replace(doubleDollarRegex, (_, latex) => {
-      const span = document.createElement('span');
-      try {
-        span.setAttribute('data-original', `$$${latex}$$`); // Store original LaTeX
-        katex.render(latex, span, { displayMode: false });
-        return span.outerHTML;
-      } catch (error) {
-        console.error('KaTeX Double Dollar Render Error:', error, latex);
-        return `Error: ${latex}`;
-      }
-    });
-
-    updatedText = updatedText.replace(dollarRegex, (_, latex) => {
-      const span = document.createElement('span');
-      try {
-        span.setAttribute('data-original', `$${latex}$`); // Store original LaTeX
-        katex.render(latex, span, { displayMode: false });
-        return span.outerHTML;
-      } catch (error) {
-        console.error('KaTeX Dollar Render Error:', error, latex);
-        return `Error: ${latex}`;
-      }
-    });
-
-    if (updatedText !== text) {
-      const wrapper = document.createElement('span');
-      wrapper.innerHTML = updatedText;
-      parent.replaceChild(wrapper, node);
-    }
-  }
-}
-
-function derenderLaTeX() {
-  // Find all rendered KaTeX elements
-  const renderedElements = document.querySelectorAll('[data-original]');
-
-  if (renderedElements.length === 0) {
-    console.log('No LaTeX elements to de-render.'); // Avoid unnecessary logging
-    return;
-  }
-
-  renderedElements.forEach((element) => {
-    const originalContent = element.getAttribute('data-original');
-    if (originalContent) {
-      // Replace the rendered KaTeX element with the original LaTeX
-      const textNode = document.createTextNode(originalContent);
-      element.replaceWith(textNode);
-    }
-  });
-
-  console.log('De-rendered all LaTeX elements.');
-}
 
 function extractProjectId() {
   const url = window.location.href; // Get current URL from the address bar
   const match = url.match(/g-p-[a-f0-9]+/);
   return match ? match[0] : null;
-}
-
-
-async function scanForEditedTurns() {
-  globalEditedIdSet.clear();
-
-  for (const turn of globalTurns) {
-    const testId = turn.getAttribute('data-testid');
-    if (!testId) continue;
-
-    turn.scrollIntoView({ behavior: 'instant', block: 'center' });
-    await new Promise(resolve => setTimeout(resolve, 120));
-
-    const prevButton = turn.querySelector('button[aria-label="Previous response"]');
-    if (prevButton) {
-      globalEditedIdSet.add(testId);
-      console.log("✏️ Detected edited:", testId);
-    }
-  }
-
-  // Rebuild UI now that we know which are edited
-  buildTree(globalTurns, globalEditedIdSet);
-}
-
-
-async function detectEditedTurns(turns) {
-  const editedIdSet = new Set();
-
-  for (const turn of turns) {
-    const testId = turn.getAttribute('data-testid');
-    if (!testId) continue;
-
-    turn.scrollIntoView({ behavior: 'instant', block: 'center' });
-
-    await new Promise(resolve => setTimeout(resolve, 150)); // give it a moment
-
-    const prevButton = turn.querySelector('button[aria-label="Previous response"]');
-    if (prevButton) {
-      editedIdSet.add(testId);
-      console.log('✏️ Detected edited:', testId);
-    }
-  }
-
-  return editedIdSet;
-}
-
-
-function getNodes() {
-  setTimeout(() => {
-    const existing = document.getElementById('chat-tree-panel');
-    if (existing) existing.remove();
-
-    // Create outer panel
-    const root = document.createElement('div');
-    root.id = 'chat-tree-panel';
-
-    // Header (drag + collapse)
-    const header = document.createElement('div');
-    header.id = 'chat-tree-header';
-    header.textContent = '📜 Chat Tree View';
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.id = 'chat-tree-toggle';
-    toggleBtn.textContent = '+';
-
-    header.appendChild(toggleBtn);
-    root.appendChild(header);
-
-    // Content
-    const content = document.createElement('div');
-    content.id = 'chat-tree-content';
-    content.style.display = 'none';
-
-    header.addEventListener('click', () => {
-      const isHidden = content.style.display === 'none';
-      content.style.display = isHidden ? 'block' : 'none';
-      toggleBtn.textContent = isHidden ? '—' : '+';
-      localStorage.setItem('chatTreeCollapsed', (!isHidden).toString());
-    });
-
-    // Refresh
-    const refreshBtn = document.createElement('button');
-    refreshBtn.textContent = '🔄 Refresh Tree';
-    refreshBtn.onclick = () => {
-      root.remove();
-      getNodes();
-    };
-    content.appendChild(refreshBtn);
-
-
-    const scanBtn = document.createElement('button');
-    scanBtn.textContent = '🧠 Scan Conversation';
-    scanBtn.style.marginLeft = '8px';
-    scanBtn.onclick = scanForEditedTurns;
-    content.appendChild(scanBtn);
-
-    // ✅ Grab turns first
-    const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
-    const editedIdSet = new Set();
-
-    // ✅ Simulate hover and detect edits
-    turns.forEach(turn => {
-      const hover = new MouseEvent('mouseover', { bubbles: true });
-      turn.dispatchEvent(hover);
-    });
-
-    // ✅ Wait a bit to let UI react to hover injection
-    setTimeout(() => {
-      turns.forEach(turn => {
-        const prevButton = turn.querySelector('button[aria-label="Previous response"]');
-        const testId = turn.getAttribute('data-testid');
-        if (prevButton && testId) {
-          editedIdSet.add(testId);
-          console.log("✏️ Found edited turn:", testId);
-        }
-      });
-
-      // Now render UI as you already wrote...
-      const list = document.createElement('ul');
-      let userTurnCount = 0;
-
-      turns.forEach((turn, i) => {
-        const user = turn.querySelector('[data-message-author-role="user"]');
-        const isEdited = editedIdSet.has(turn.getAttribute('data-testid'));
-
-        const summaryText = user?.innerText?.trim()?.slice(0, 80).replace(/\n/g, ' ') || null;
-
-        if (user && summaryText) {
-          const item = document.createElement('li');
-          item.className = 'chat-tree-item';
-          item.textContent = `${++userTurnCount}: ${summaryText}`;
-          item.dataset.turnIndex = i;
-
-          if (isEdited) {
-            item.classList.add('chat-tree-edited');
-            item.title = '✏️ Edited message';
-            item.textContent += ' ✏️';
-          }
-
-          item.onclick = () => {
-            turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            localStorage.setItem('chatTreeLastScrollIndex', i);
-          };
-
-          if (isEdited) {
-            const fork = document.createElement('details');
-            fork.className = 'chat-tree-fork';
-            const forkKey = `chatTreeFork-open-${userTurnCount}`;
-            const forkState = localStorage.getItem(forkKey);
-            fork.open = forkState !== 'false';
-            fork.addEventListener('toggle', () => {
-              localStorage.setItem(forkKey, fork.open.toString());
-            });
-
-            const forkLabel = document.createElement('summary');
-            forkLabel.textContent = `✏️ Fork ${userTurnCount}`;
-            fork.appendChild(forkLabel);
-            fork.appendChild(item);
-            list.appendChild(fork);
-          } else {
-            list.appendChild(item);
-          }
-        } else {
-          const empty = document.createElement('li');
-          empty.className = 'chat-tree-empty';
-          empty.innerHTML = `<hr title="(No user message)">`;
-          list.appendChild(empty);
-        }
-      });
-
-      content.appendChild(list);
-      root.appendChild(content);
-      const existingPanel = document.getElementById('chat-tree-panel');
-      if (existingPanel) existingPanel.remove();
-      document.body.appendChild(root);
-
-      if (dragable) makeDraggable(root);
-    }, 300); // ⏳ Enough delay to reveal edit buttons
-  }, 1000);
-}
-
-
-function buildTree(turns, editedIdSet) {
-  const content = document.getElementById('chat-tree-content');
-  if (!content) return;
-
-  // Remove previous list
-  const oldList = content.querySelector('ul');
-  if (oldList) oldList.remove();
-
-  const list = document.createElement('ul');
-  let userTurnCount = 0;
-
-  turns.forEach((turn, i) => {
-    const testId = turn.getAttribute('data-testid');
-    const user = turn.querySelector('[data-message-author-role="user"]');
-    const isEdited = editedIdSet.has(testId);
-    const summaryText = user?.innerText?.trim()?.slice(0, 80).replace(/\n/g, ' ') || null;
-
-    if (user && summaryText) {
-      const item = document.createElement('li');
-      item.className = 'chat-tree-item';
-      item.textContent = `${++userTurnCount}: ${summaryText}`;
-      item.dataset.turnIndex = i;
-
-      if (isEdited) {
-        item.classList.add('chat-tree-edited');
-        item.title = '✏️ Edited message';
-        item.textContent += ' ✏️';
-      }
-
-      item.onclick = () => {
-        turn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        localStorage.setItem('chatTreeLastScrollIndex', i);
-      };
-
-      if (isEdited) {
-        const fork = document.createElement('details');
-        fork.className = 'chat-tree-fork';
-        const forkKey = `chatTreeFork-open-${userTurnCount}`;
-        const forkState = localStorage.getItem(forkKey);
-        fork.open = forkState !== 'false';
-
-        fork.addEventListener('toggle', () => {
-          localStorage.setItem(forkKey, fork.open.toString());
-        });
-
-        const forkLabel = document.createElement('summary');
-        forkLabel.textContent = `✏️ Fork ${userTurnCount}`;
-        fork.appendChild(forkLabel);
-        fork.appendChild(item);
-        list.appendChild(fork);
-      } else {
-        list.appendChild(item);
-      }
-    } else {
-      const empty = document.createElement('li');
-      empty.className = 'chat-tree-empty';
-      empty.innerHTML = `<hr title="(No user message)">`;
-      list.appendChild(empty);
-    }
-  });
-
-  content.appendChild(list);
-}
-
-function makeDraggable(element) {
-  element.style.cssText += `
-    position: fixed !important;
-    top: 20px;
-    right: 20px;
-    z-index: 2000;
-    cursor: move;
-    width: 300px;
-		max-height: 70vh;
-    overflow: visible;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  `;
 
   let isDragging = false;
   let offsetX = 0;
   let offsetY = 0;
-
-
-
 
   // Add event listeners for dragging
   element.addEventListener('mousedown', (event) => {
