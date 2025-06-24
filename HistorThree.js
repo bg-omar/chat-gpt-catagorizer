@@ -1,3 +1,4 @@
+(() => {
 const dragable = true;
 const savedPos = localStorage.getItem('chatTreePos');
 function getConversationIdHash() {
@@ -543,6 +544,5 @@ function makeDraggable(element) {
             localStorage.setItem('chatTreePos', JSON.stringify({ left: event.clientX - offsetX, top: event.clientY - offsetY }));
         }
     });
-
-
-}
+}    
+})();
