@@ -1,3 +1,4 @@
+(() => {
 let enableEquationEnv = false;
 let enableBlockBrackets = false;
 let enableInlineParens = false;
@@ -340,4 +341,4 @@ function getButtonStyles(isActive = false) {
     font-size: 8px;
   `;
 }
-
+})();
