@@ -254,6 +254,5 @@
     cursor: pointer;
     font-size: 8px;
   `;
-  }
-
+}
 })();
