@@ -1,3 +1,4 @@
+(() => {
 let isScriptEnabled = JSON.parse(sessionStorage.getItem('isScriptEnabled')) || true; // Default state
 let isNavScrollEnabled = JSON.parse(sessionStorage.getItem('isNavScrollEnabled')) || true; // Default state
 let isSortListsEnabled = false;
@@ -31,7 +32,14 @@ const scriptButton = document.createElement('button');
 const scrollButton = document.createElement('button');
 const sortListsButton = document.createElement('button');
 
-
+// Helper to reliably locate the chat history container even if the
+// surrounding markup changes between releases.
+function getHistorySection() {
+  return (
+    document.getElementById('history') ||
+    document.querySelector('nav[aria-label="Chat history"]')
+  );
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initializeButtons();
@@ -176,7 +184,10 @@ function repeater() {
     if (isPaused) return; // Skip execution if paused
     try {
       await getStates();
-      await waitForElement('#history > aside');
+      // Wait for the chat history section to appear using a more robust lookup
+      await waitForElement('#history').catch(() =>
+        waitForElement('nav[aria-label="Chat history"]')
+      );
 
       if (apiOffset <= dataTotal) {
         await scrollAndEvent(300, 'nav');
@@ -250,13 +261,16 @@ function repeater() {
   }
 }
 
+function getChatTitleElements() {
+  const history = document.getElementById('history');
+  if (!history) return [];
+  return history.querySelectorAll('a span[dir="auto"], li [dir="auto"]');
+}
+
 // = REPLACE TEXT COLOR CATEGORIES
 function checkAndReplaceText() {
   // Select both existing elements and the new OL path you want to include
-  const divElements = document.querySelectorAll(
-      '.relative.grow.overflow-hidden.whitespace-nowrap, ' +
-      'body > div.flex.h-full.w-full.flex-col > div > div.relative.flex.h-full.w-full.flex-row.overflow-hidden > div.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div > section > div:nth-child(2) > div > div > div > div > div > div > div.mb-14.mt-6 > ol > li > a > div > div > div.flex-grow > div.text-sm.font-medium'
-  );
+  const divElements = getChatTitleElements();
 
   if (divElements.length === 0) return;
 
@@ -334,8 +348,7 @@ function sortLists() {
   const categories = {};
   const uncategorizedItems = [];
   const singleItems = []; // To collect single item categories
-  const listContainer = document.querySelector('div.flex.flex-col.gap-2.text-token-text-primary.text-sm');
-
+  const listContainer = getHistorySection();
   if (!listContainer) return;
 
 
@@ -734,9 +747,7 @@ async function scrollAndEvent(amount, container = 'nav') {
         '.relative.flex.h-full.max-w-full.flex-1.flex-col.overflow-hidden > main > div > section > div:nth-child(2) > div > div'
     );
   } else {
-    scrollContainer = document.querySelector(
-        'div.bg-token-sidebar-surface-primary nav div.flex-col.flex-1.transition-opacity.duration-500.relative.pe-3.overflow-y-auto'
-    );
+     scrollContainer = getHistorySection();
   }
 
   if (!scrollContainer) {
@@ -890,10 +901,7 @@ function collectSingleItems(categories, singleItems, fragment) {
 }
 
 function initializeMutationObserver() {
-  const targetNode = document.querySelector(
-      '.relative.grow.overflow-hidden.whitespace-nowrap'
-  );
-
+  const targetNode = getHistorySection();
   const config = { childList: true, subtree: true, characterData: true };
 
   const callback = (mutationsList) => {
@@ -1002,14 +1010,13 @@ function notifyScriptOfChange(changedElement) {
 }
 
 function renameChatHandler(mutation) {
-  const updatedTitleElement = mutation.target.closest(
-      '.relative.grow.overflow-hidden.whitespace-nowrap'
-  );
+  const listItem = mutation.target.closest('li[data-id]');
+  if (!listItem) return;
+  const updatedTitleElement = listItem.querySelector('[dir="auto"]');
   if (!updatedTitleElement) return;
 
   const updatedTitle = updatedTitleElement.textContent.trim();
-  const chatId = updatedTitleElement.closest('li')?.getAttribute('data-id');
-
+  const chatId = listItem.getAttribute('data-id');
   if (!chatId || !updatedTitle) return;
 
   // Ensure session storage is refreshed before updating
@@ -1206,7 +1213,7 @@ function validateListItems() {
 }
 
 function initializeButtonClickListeners() {
-  const listContainer = document.querySelector('.group\\/sidebar');
+  const listContainer = getHistorySection();
   if (!listContainer) return;
 
   listContainer.addEventListener('click', (event) => {
@@ -1266,3 +1273,4 @@ function extractProjectId() {
     document.body.style.userSelect = ''; // Re-enable text selection
   });
 }
+})();

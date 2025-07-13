@@ -4,6 +4,18 @@
   user-select: none !important;
 }
 
+.chat-tree-breadcrumbs a {
+  color: #4b78c1; text-decoration: underline;
+}
+.chat-tree-breadcrumbs a:hover {
+  text-decoration: underline dotted;
+}
+
+.chat-tree-current-path {
+  background: #36173699; !important;
+  border-left: 3px solid #090 !important;
+}
+
 #chat-tree-panel {
   position: fixed !important;
   top: 50px;       /* ✅ allow Y movement */
