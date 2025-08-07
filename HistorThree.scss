@@ -12,7 +12,7 @@
 }
 
 .chat-tree-current-path {
-  background: #36173699; !important;
+  background: #36173699 !important;
   border-left: 3px solid #090 !important;
 }
 
@@ -26,10 +26,6 @@
   z-index: 2000;
   max-height: calc(70vh + 40px); // include header height
   overflow: visible;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  width: 320px;
-  background: #171717BB;
-  border: 1px solid #ccc;
   border-radius: 8px;
   color: #F0F;
   -webkit-user-drag: none;
@@ -58,14 +54,18 @@
   height: 100%;
 }
 
+#chat-tree-panel, #chat-tree-header, #chat-tree-content {
+  box-sizing: border-box;
+}
 
 #chat-tree-header {
   border: 1px solid #ccc;
   border-radius: 8px;
-  background: #66006633;
-  padding: 6px 10px;
+  background: #66006699;
+  padding: 0 10px;
+  height: 40px;
   font-weight: bold;
-  width: 320px;
+  width: fit-content;
   color: #f4f;
   user-select: none;
   display: flex;
@@ -74,7 +74,7 @@
 }
 #chat-tree-toggle {
   font-weight: bold;
-  border: 3px solid #909;
+  border: 0;
   background: none;
   color: #0f0;
   font-size: 24px;
@@ -94,8 +94,12 @@
 #chat-tree-content {
   padding: 10px;
   max-height: 70vh;
-  overflow-y: auto;
+  overflow: auto;
+  position: relative;
   color: #f4f;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  background: #171717BB;
+  border: 1px solid #ccc;
 }
 .chat-tree-item {
   cursor: pointer;
@@ -143,13 +147,41 @@
 }
 
 .\@\[64rem\]\:\[--thread-content-max-width\:48rem\] {
-    --thread-content-max-width: 100%;
+  --thread-content-max-width: 100%;
 }
 
-    .max-w-lg {
-        max-width: 90%;
-    }
+.max-w-lg {
+  max-width: 90%;
+}
 
-    .max-w-md {
-        max-width: 90%;
-    }
+.max-w-md {
+  max-width: 90%;
+}
+
+
+/* Add to your page (style tag or CSS-in-JS) */
+#chat-tree-panel.super-collapsed {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
+  overflow: hidden !important;
+  background: none !important; /* Or your panel background */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2) !important;
+}
+#chat-tree-panel.super-collapsed > #chat-tree-content {
+  display: none !important;
+}
+
+#chat-tree-panel.chat-tree-super-collapsed {
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  max-width: 40px !important;
+  max-height: 40px !important;
+  overflow: hidden !important;
+  background: none !important; /* or your preferred color */
+}

@@ -1,6 +1,8 @@
 (() => {
+    let globalTurns = [];
+    let globalEditedIdSet = new Set();
     const dragable = true;
-    const savedPos = localStorage.getItem('chatTreePos');
+    const savedPos = sessionStorage.getItem('chatTreePos') || null;
     function getConversationIdHash() {
         const path = window.location.pathname;
         const match = path.match(/\/c\/([a-f0-9-]{36})/);
@@ -21,8 +23,7 @@
     }
 
 
-    let globalTurns = [];
-    let globalEditedIdSet = new Set();
+
 
 
     // ------ Fork name generator ------
@@ -252,14 +253,41 @@
             // 📜 Create root panel
             const root = document.createElement('div');
             root.id = 'chat-tree-panel';
+            const savedSize = JSON.parse(localStorage.getItem('chatTreeSize') || 'null');
+            if (savedSize) {
+                root.style.width = savedSize.width + 'px';
+                root.style.height = savedSize.height + 'px';
+            }
+
             root.setAttribute('draggable', 'false');
 
-
-
-
-            // 🔒 Header
+            // 🔒 Header (must be created before super-collapsed check)
             const header = document.createElement('div');
             header.id = 'chat-tree-header';
+
+            // -- Handle "super-collapsed" mode --
+            if (sessionStorage.getItem('chatTreeSuperCollapsed') === 'true') {
+                header.innerHTML = '📜';
+                header.classList.add('super-collapsed');
+                // On double-click, expand and refresh
+                header.ondblclick = () => {
+                    sessionStorage.removeItem('chatTreeSuperCollapsed');
+                    root.remove();
+                    getNodes();
+                };
+                root.appendChild(header);
+                // Remove any sticky old width/height before adding the class:
+                root.style.width = '40px';
+                root.style.height = '40px';
+                root.classList.add('chat-tree-super-collapsed');
+                root.style.boxShadow = 'rgba(0, 0, 0, 0.2) 0px 4px 10px';
+                document.body.appendChild(root);
+                if (dragable) makeDraggable(root);
+                return; // <--- Don't continue with building the rest!
+            }
+
+
+
             header.textContent = '📜';
             header.classList.add('collapsed');
 
@@ -268,38 +296,50 @@
             toggleBtn.textContent = '+';
             header.appendChild(toggleBtn);
 
-
-
-            // 🔃 Refresh Button
             const refreshBtn = document.createElement('button');
-            refreshBtn.textContent = '🔄 Refresh';
+            refreshBtn.textContent = '🔄';
             refreshBtn.onclick = () => {
                 root.remove();
                 getNodes();
             };
             header.appendChild(refreshBtn);
 
-            // 🧠 Scan Button
             const scanBtn = document.createElement('button');
-            scanBtn.textContent = '🧠 Scan';
+            scanBtn.textContent = '🔍';
             scanBtn.style.marginLeft = '8px';
             scanBtn.onclick = scanForEditedTurns;
             header.appendChild(scanBtn);
-
 
             const closeBtn = document.createElement('button');
             closeBtn.id = 'chat-tree-close';
             closeBtn.textContent = '✖';
             closeBtn.title = 'Close panel';
             closeBtn.onclick = () => {
-                root.remove();
-                // localStorage.removeItem('chatTreeCollapsed');
-                // localStorage.removeItem('chatTreePos');
+                // Super-collapse: only show 📜, draggable, no buttons
+                header.innerHTML = '📜';
+                header.classList.add('super-collapsed');
+                if (typeof content !== 'undefined') {
+                    content.style.display = 'none';
+                }
+                root.classList.add('chat-tree-super-collapsed');
+                root.style.boxShadow = 'rgba(0, 0, 0, 0.2) 0px 4px 10px';
+                sessionStorage.setItem('chatTreeSuperCollapsed', 'true');
+                if (dragable) makeDraggable(root);
             };
             header.appendChild(closeBtn);
 
+            // On double-click, expand if in super-collapsed (may not be needed here, but doesn't hurt)
+            header.ondblclick = (e) => {
+                if (header.classList.contains('super-collapsed')) {
+                    sessionStorage.removeItem('chatTreeSuperCollapsed');
+                    root.remove();
+                    getNodes();
+                }
+            };
 
             root.appendChild(header);
+
+
 
             // 🔄 Content container
             const content = document.createElement('div');
@@ -307,19 +347,24 @@
             content.style.display = 'block';
 
             toggleBtn.addEventListener('click', () => {
-                const isHidden = content.style.display === 'none';
-                content.style.display = isHidden ? 'block' : 'none';
-                toggleBtn.textContent = isHidden ? '—' : '+';
-                if (!isHidden) {
-                    root.style.width = '520px';
-                    root.style.height = '40px';
-                    root.style.overflow = 'hidden';
-                } else {
-                    root.style.width = '520px';
-                    root.style.height = '';
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                toggleBtn.textContent = isVisible ? '—' : '+';
+                if (!isVisible) {
+                    if (savedSize) {
+                        root.style.width = savedSize.width + 'px';
+                        root.style.height = savedSize.height + 'px';
+                    } else {
+                        root.style.width = '520px';
+                        root.style.height = '40px';
+                    }
                     root.style.overflow = 'visible';
+                } else {
+                    root.style.width = '40px';
+                    root.style.height = '';
+                    root.style.overflow = 'hidden';
                 }
-                sessionStorage.setItem('chatTreeCollapsed', (!isHidden).toString());
+                sessionStorage.setItem('chatTreeCollapsed', (!isVisible).toString());
             });
 
 
@@ -421,6 +466,71 @@
 
 
                 root.appendChild(content);
+                // --- Add resize handle to bottom-right corner ---
+                const resizeHandle = document.createElement('div');
+                resizeHandle.style.position = 'absolute';
+                resizeHandle.style.right = '2px';
+                resizeHandle.style.bottom = '2px';
+                resizeHandle.style.width = '18px';
+                resizeHandle.style.height = '18px';
+                resizeHandle.style.cursor = 'nwse-resize';
+                resizeHandle.style.background = 'linear-gradient(135deg, transparent 60%, #888 60%)';
+                resizeHandle.style.zIndex = '10';
+                resizeHandle.title = 'Resize window';
+                resizeHandle.className = 'chat-tree-resize-handle';
+                resizeHandle.style.background = 'none';
+                resizeHandle.style.borderRight = '3px solid #a0f';
+                resizeHandle.style.borderBottom = '3px solid #a0f';
+                resizeHandle.style.borderRadius = '0 0 6px 0';
+                resizeHandle.style.width = '18px';
+                resizeHandle.style.height = '18px';
+                resizeHandle.style.boxSizing = 'border-box';
+                content.appendChild(resizeHandle);
+
+
+
+                let isResizing = false;
+                let resizeStartX, resizeStartY, startWidth, startHeight;
+
+                resizeHandle.addEventListener('mousedown', function(e) {
+                    e.stopPropagation();
+                    isResizing = true;
+                    resizeStartX = e.clientX;
+                    resizeStartY = e.clientY;
+                    startWidth = root.offsetWidth;
+                    startHeight = root.offsetHeight;
+                    document.body.style.userSelect = 'none';
+                });
+
+                document.addEventListener('mousemove', function(e) {
+                    if (!isResizing) return;
+                    e.preventDefault();
+
+                    let newWidth = Math.max(220, startWidth + (e.clientX - resizeStartX));
+                    let newHeight = Math.max(80, startHeight + (e.clientY - resizeStartY));
+                    newWidth = Math.min(newWidth, window.innerWidth - root.offsetLeft);
+                    newHeight = Math.min(newHeight, window.innerHeight - root.offsetTop);
+
+                    // Apply to panel
+                    root.style.width = newWidth + 'px';
+                    root.style.height = newHeight + 'px';
+                    // Apply to header/content
+                    header.style.width = newWidth + 'px';
+                    content.style.width = newWidth + 'px';
+                    content.style.height = (newHeight - header.offsetHeight) + 'px';
+                });
+
+                document.addEventListener('mouseup', function() {
+                    if (isResizing) {
+                        isResizing = false;
+                        document.body.style.userSelect = '';
+                        localStorage.setItem('chatTreeSize', JSON.stringify({
+                            width: root.offsetWidth,
+                            height: root.offsetHeight
+                        }));
+                    }
+                });
+
                 // 🔐 Lock all children before DOM insertion
                 root.querySelectorAll('*').forEach(el => el.setAttribute('draggable', 'false'));
 
@@ -602,63 +712,63 @@
      *  – place this near the bottom of your main script (after buildTree)
      * -------------------------------------------------------------------*/
 
-/* make conversationId writable so we can refresh it on navigation */
-conversationId = getConversationIdHash();
+    /* make conversationId writable so we can refresh it on navigation */
+    conversationId = getConversationIdHash();
 
-/* constants & debouncer ------------------------------------------------ */
-const CHAT_TREE_ID = 'chat-tree-panel';
+    /* constants & debouncer ------------------------------------------------ */
+    const CHAT_TREE_ID = 'chat-tree-panel';
 
-let rebuildQueued = false;
+    let rebuildQueued = false;
 
-function queueBuild() {
-    if (rebuildQueued) return;
-    rebuildQueued = true;
+    function queueBuild() {
+        if (rebuildQueued) return;
+        rebuildQueued = true;
 
-    requestAnimationFrame(() => {
-        rebuildQueued = false;
+        requestAnimationFrame(() => {
+            rebuildQueued = false;
 
-        // 🔁 ➊ Refresh conversation ID if URL changed
-        conversationId = getConversationIdHash();
+            // 🔁 ➊ Refresh conversation ID if URL changed
+            conversationId = getConversationIdHash();
 
-        // 🔄 ➋ Load full stored tree object
-        const storedTree = loadTree();
-        const storedTurns = storedTree.turns || [];
+            // 🔄 ➋ Load full stored tree object
+            const storedTree = loadTree();
+            const storedTurns = storedTree.turns || [];
 
-        // 🧠 Build edited ID set from stored data
-        const editedIdSet = new Set(
-            storedTurns.filter(item => item.isEdited).map(item => item.testId)
+            // 🧠 Build edited ID set from stored data
+            const editedIdSet = new Set(
+                storedTurns.filter(item => item.isEdited).map(item => item.testId)
+            );
+
+            // 🧱 ➌ Re-collect live DOM turns
+            const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
+            globalTurns = turns;
+
+            // 🌳 ➍ Build tree from stored data + DOM
+            buildTree(turns, editedIdSet, storedTurns);
+            saveTree(turns, editedIdSet);
+        });
+    }
+
+    /* one global observer --------------------------------------------------- */
+    const observer = new MutationObserver((records) => {
+        // Ignore mutations if everything happened inside our panel
+        const onlyInsidePanel = records.every(r =>
+            r.target.closest('#' + CHAT_TREE_ID)
         );
+        if (onlyInsidePanel) return;
 
-        // 🧱 ➌ Re-collect live DOM turns
-        const turns = Array.from(document.querySelectorAll('[data-testid^="conversation-turn-"]'));
-        globalTurns = turns;
-
-        // 🌳 ➍ Build tree from stored data + DOM
-        buildTree(turns, editedIdSet, storedTurns);
-        saveTree(turns, editedIdSet);
+        // Something changed elsewhere – rebuild the tree
+        queueBuild();
     });
-}
 
-/* one global observer --------------------------------------------------- */
-const observer = new MutationObserver((records) => {
-    // Ignore mutations if everything happened inside our panel
-    const onlyInsidePanel = records.every(r =>
-        r.target.closest('#' + CHAT_TREE_ID)
-    );
-    if (onlyInsidePanel) return;
-
-    // Something changed elsewhere – rebuild the tree
-    queueBuild();
-});
-
-/* Start watching once the DOM is ready */
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    /* Start watching once the DOM is ready */
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    } else {
         observer.observe(document.body, { childList: true, subtree: true });
-    });
-} else {
-    observer.observe(document.body, { childList: true, subtree: true });
-}
+    }
 
     function renderBreadcrumbs(storedTurns, currentTestId) {
         const idx = storedTurns.findIndex(t => t.testId === currentTestId);
@@ -705,73 +815,81 @@ if (document.readyState === 'loading') {
     }
 
 
+    function makeDraggable(element) {
+        element.setAttribute('draggable', 'false'); // 👈 prevent ghost image
+        element.querySelectorAll('*').forEach(child => {
+            child.setAttribute('draggable', 'false');
+        });
 
-function makeDraggable(element) {
-    element.setAttribute('draggable', 'false'); // 👈 prevent ghost image
-    element.querySelectorAll('*').forEach(child => {
-        child.setAttribute('draggable', 'false');
-    });
-    element.style.cssText += `
-      position: fixed !important;
-      top: 20px;
-      left: 20px;
-      z-index: 2000;
-      width: 30px;
-      max-height: 70vh;
-      overflow: visible;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    `;
+        // Default panel styles (except position, which is restored below)
+        element.style.position = 'fixed';
+        element.style.zIndex = 2000;
+        element.style.boxShadow = '0 4px 10px rgba(0,0,0,0.2)';
+        element.style.cursor = 'grab';
 
+        // Restore position if saved
+        const savedPos = JSON.parse(sessionStorage.getItem('chatTreePos') || 'null');
+        if (savedPos) {
+            let { left, top } = savedPos;
+            left = Math.max(left, 10);
+            top = Math.max(top, 10);
+            element.style.left = `${left}px`;
+            element.style.top = `${top}px`;
+        } else {
+            element.style.left = '20px';
+            element.style.top = '20px';
+        }
 
-    let isDragging = false;
-    let offsetX = 0;
-    let offsetY = 0;
+        let isDragging = false;
+        let offsetX = 0, offsetY = 0;
 
+        // Always drag by header (fallback to panel if no header)
+        const handle = element.querySelector('#chat-tree-header') || element;
+        handle.style.cursor = 'grab';
 
-    if (savedPos) {
-        const { left, top } = JSON.parse(savedPos);
-        element.style.left = `${left}px`;
-        element.style.top = `${top}px`;
+        handle.addEventListener('mousedown', (event) => {
+            if (event.target.closest('input,textarea,button,select,[contenteditable]')) return;
+            event.preventDefault();
+            isDragging = true;
+            handle.style.cursor = 'grabbing';
+            offsetX = event.clientX - element.getBoundingClientRect().left;
+            offsetY = event.clientY - element.getBoundingClientRect().top;
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.userSelect = '';
+                handle.style.cursor = 'grab';
+            }
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            if (isDragging) {
+                event.preventDefault();
+
+                // Calculate unclamped position
+                let newLeft = event.clientX - offsetX;
+                let newTop = event.clientY - offsetY;
+
+                // Clamp so panel stays fully visible in viewport
+                const maxLeft = window.innerWidth - element.offsetWidth;
+                const maxTop = window.innerHeight - element.offsetHeight;
+                newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+                newTop = Math.max(0, Math.min(newTop, maxTop));
+
+                element.style.left = `${newLeft}px`;
+                element.style.top = `${newTop}px`;
+
+                // Save position
+                localStorage.setItem(
+                    'chatTreePos',
+                    JSON.stringify({ left: newLeft, top: newTop })
+                );
+            }
+        });
+
     }
 
-
-    element.style.cursor = 'grab';
-
-    element.addEventListener('mousedown', (event) => {
-        // 👇 Skip drag if clicking inside input, textarea, button, etc.
-        if (
-            event.target.closest('input,textarea,button,select,[contenteditable]')
-        ) {
-            // Let the click focus the input, don't start dragging
-            return;
-        }
-        event.preventDefault();
-        isDragging = true;
-        element.style.cursor = 'grabbing';
-        offsetX = event.clientX - element.getBoundingClientRect().left;
-        offsetY = event.clientY - element.getBoundingClientRect().top;
-        document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
-            document.body.style.userSelect = '';
-            element.style.cursor = 'grab';
-
-        }
-    });
-
-
-    document.addEventListener('mousemove', (event) => {
-        if (isDragging) {
-            event.preventDefault(); // 🚫 prevents accidental text selection or scroll
-            element.style.left = `${event.clientX - offsetX}px`;
-            element.style.top = `${event.clientY - offsetY}px`;
-            // 🧠 Save position
-
-            localStorage.setItem('chatTreePos', JSON.stringify({ left: event.clientX - offsetX, top: event.clientY - offsetY }));
-        }
-    });
-}
 })();
