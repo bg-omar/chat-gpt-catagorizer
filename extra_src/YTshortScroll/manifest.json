@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Shorts Auto-Advance (1 repeat)",
+  "version": "0.1.0",
+  "description": "Automatically go to the next YouTube Short after one repeat.",
+  "action": {
+	"default_title": "Shorts Auto-Advance",
+	"default_popup": "popup.html",
+	"default_icon": {
+	  "16": "icon.png",
+	  "48": "icon.png",
+	  "128": "icon.png"
+	}
+  },
+  "icons": {
+	"16": "icon.png",
+	"48": "icon.png",
+	"128": "icon.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*"],
+  "background": {
+	"service_worker": "background.js"
+  },
+  "content_scripts": [
+	{
+	  "matches": ["https://www.youtube.com/shorts/*"],
+	  "js": ["content.js"],
+	  "run_at": "document_idle"
+	}
+  ]
+}
