@@ -8,12 +8,14 @@
 	"default_popup": "popup.html",
 	"default_icon": {
 	  "16": "icon.png",
+	  "32": "icon.png",
 	  "48": "icon.png",
 	  "128": "icon.png"
 	}
   },
   "icons": {
 	"16": "icon.png",
+	"32": "icon.png",
 	"48": "icon.png",
 	"128": "icon.png"
   },
@@ -24,7 +26,7 @@
   },
   "content_scripts": [
 	{
-	  "matches": ["https://www.youtube.com/shorts/*"],
+	  "matches": ["*://*.youtube.com/shorts/*"],
 	  "js": ["content.js"],
 	  "run_at": "document_idle"
 	}

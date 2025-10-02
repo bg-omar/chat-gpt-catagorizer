@@ -11,6 +11,26 @@ let wrapCount = 0;
 let lastTime = 0;
 let advancedThisClip = false;
 let hrefSeen = location.href;
+let justAttached = false;
+let manualNavigation = false;
+let manualNavigationTimeout = null;
+let autoAdvanceTimer = null; // pending auto advance timeout id
+// Track recent user input to distinguish manual navigation
+let recentUserInputTs = 0;
+let lastWrapIncrementTs = 0; // debounce duplicate wrap detections
+
+function markUserInput() {
+    recentUserInputTs = performance.now();
+    // If an auto-advance is pending, cancel it because the user intervened.
+    if (autoAdvanceTimer) {
+        clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+}
+
+['wheel','mousedown','touchstart','keydown'].forEach(ev => {
+    window.addEventListener(ev, markUserInput, { capture:true, passive:true });
+});
 
 // --- settings bootstrap & live updates ---
 (async function initSettings() {
@@ -70,6 +90,12 @@ function attachToShort() {
 }
 
 function detach() {
+    if (autoAdvanceTimer) { // cancel any pending programmatic advance (prevents double skip)
+        clearTimeout(autoAdvanceTimer);
+        autoAdvanceTimer = null;
+    }
+    // Reset wrap debounce
+    lastWrapIncrementTs = 0;
     if (video?.__autoAdvanceHandlers) {
         const { onTimeUpdate, onEnded, onSeeked } = video.__autoAdvanceHandlers;
         video.removeEventListener("timeupdate", onTimeUpdate);
@@ -90,20 +116,40 @@ function attachVideo(v) {
     wrapCount = 0;
     lastTime = v.currentTime || 0;
     advancedThisClip = false;
+    manualNavigation = true;
+    if (manualNavigationTimeout) clearTimeout(manualNavigationTimeout);
+    // Longer suppression window if there was very recent user input (indicates manual scroll)
+    const now = performance.now();
+    const baseDelay = 600;
+    const extra = (now - recentUserInputTs) < 800 ? 500 : 0; // add buffer if user just interacted
+    manualNavigationTimeout = setTimeout(() => { manualNavigation = false; }, baseDelay + extra);
+
+    function incrementWrap(cause) {
+        if (!SETTINGS.enabled) return;
+        if (manualNavigation) return; // suppressed during manual window
+        const now = performance.now();
+        // Debounce: sometimes both 'ended' and loop detection fire for same cycle.
+        if (now - lastWrapIncrementTs < 350) {
+            if (window.__SHORTS_ADV_DEBUG) console.log('[ShortsAdv] Skipping duplicate wrap via', cause);
+            return;
+        }
+        lastWrapIncrementTs = now;
+        wrapCount += 1;
+        if (window.__SHORTS_ADV_DEBUG) console.log('[ShortsAdv] wrap++ =', wrapCount, 'cause=', cause, 'needed=', SETTINGS.repeats + 1);
+        maybeAdvance();
+    }
 
     const onTimeUpdate = () => {
         if (!video || !SETTINGS.enabled) return;
+        if (manualNavigation) return;
         const t  = video.currentTime || 0;
         const dur = Number.isFinite(video.duration) ? video.duration : NaN;
-
         const nearEnd  = Number.isFinite(dur) ? (lastTime > Math.max(0, dur - WRAP_T_NEAR_END)) : (lastTime > 1.0);
         const nearZero = t < WRAP_T_NEAR_ZERO;
         const jumpedBack = t + 0.4 < lastTime;
-
         if ((nearEnd && nearZero) || jumpedBack) {
             if (lastTime > 1.0 && nearZero) {
-                wrapCount += 1;
-                maybeAdvance();
+                incrementWrap('timeupdate-loop');
             }
         }
         lastTime = t;
@@ -111,15 +157,15 @@ function attachVideo(v) {
 
     const onEnded = () => {
         if (!SETTINGS.enabled) return;
-        wrapCount += 1;
-        maybeAdvance();
+        if (manualNavigation) return;
+        incrementWrap('ended');
     };
 
     const onSeeked = () => {
         if (!SETTINGS.enabled) return;
+        if (manualNavigation) return;
         if (video?.currentTime < WRAP_T_NEAR_ZERO && lastTime > 1.0) {
-            wrapCount += 1;
-            maybeAdvance();
+            incrementWrap('seeked-loop');
         }
     };
 
@@ -131,16 +177,32 @@ function attachVideo(v) {
 
 function maybeAdvance() {
     if (advancedThisClip) return;
-    // Advance after N repeats (0 => after first playthrough)
-    if (wrapCount >= SETTINGS.repeats) {
+    if (manualNavigation) return; // never auto-advance during suppression window
+    const neededPlaythroughs = SETTINGS.repeats + 1;
+    if (wrapCount >= neededPlaythroughs) {
+        if (performance.now() - recentUserInputTs < 300) {
+            if (window.__SHORTS_ADV_DEBUG) console.log('[ShortsAdv] Abort advance due to recent user input; resetting counters');
+            wrapCount = 0;
+            lastTime = video?.currentTime || 0;
+            lastWrapIncrementTs = performance.now();
+            return;
+        }
         advancedThisClip = true;
-        setTimeout(() => {
+        if (autoAdvanceTimer) { clearTimeout(autoAdvanceTimer); }
+        autoAdvanceTimer = setTimeout(() => {
+            autoAdvanceTimer = null;
+            if (performance.now() - recentUserInputTs < 400) {
+                if (window.__SHORTS_ADV_DEBUG) console.log('[ShortsAdv] Advance cancelled (late user input)');
+                advancedThisClip = false;
+                return;
+            }
+            if (window.__SHORTS_ADV_DEBUG) console.log('[ShortsAdv] Advancing to next short');
             if (!clickNextShortButton()) {
                 if (!goToNextByAnchor()) {
                     simulateKeyNext();
                 }
             }
-        }, 60);
+        }, 120);
     }
 }
 
