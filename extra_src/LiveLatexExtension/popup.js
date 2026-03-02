@@ -4,7 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
         enableBlock: document.getElementById('blockToggle'),
         enableInline: document.getElementById('inlineToggle'),
         enableDoubleDollar: document.getElementById('doubleDollarToggle'),
-        enableSingleDollar: document.getElementById('singleDollarToggle')
+        enableSingleDollar: document.getElementById('singleDollarToggle'),
+        enableProse: document.getElementById('proseToggle')
     };
 
     const btnSelectAll = document.getElementById('btnSelectAll');
@@ -18,12 +19,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultStates = {
         enableEq: true, enableBlock: true, enableInline: true, enableDoubleDollar: true, enableSingleDollar: true, isGlobalEnabled: true,
         customMacros: {
-            "\\vswirl": "\\mathbf{v}_{\\!\\boldsymbol{\\circlearrowleft}}",
+            "\\vswirl": "\\mathbf{v}_{\\!\\scriptscriptstyle\\boldsymbol{\\circlearrowleft}}",
             "\\rhocore": "\\rho_{\\text{core}}",
             "\\rhom": "\\rho_{\\!m}",
-            "\\rhof": "\\rho_{\\!f}"
+            "\\rhof": "\\rho_{\\!f}",
+            "\\vswirltext": "\\mathbf{v}_{\\mathrm{swirl}}",
+            "\\vscore": "\\mathbf{v}_{\\swirlarrow\\text{(core)}}",
+            "\\vnorm": "\\lVert \\mathbf{v}_{\\scriptscriptstyle\\boldsymbol{\\circlearrowleft}} \\rVert",
+            "\\Fmaxswirl": "F^{max}_{\\!\\scriptscriptstyle\\boldsymbol{\\circlearrowleft}}",
+            "\\SwirlClock": "S_{(t)}^{\\!\\scriptscriptstyle\\boldsymbol{\\circlearrowleft}}"
         }
     };
+
 
     chrome.storage.local.get(defaultStates, (result) => {
         for (const key in toggles) toggles[key].checked = result[key];

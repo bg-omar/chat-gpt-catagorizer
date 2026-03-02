@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LiveLatex",
-  "version": "2.4",
-  "description": "Live KaTeX rendering voor Google Gemini en ChatGPT met Custom Macros.",
+  "version": "2.5",
+  "description": "Live KaTeX rendering & Document Structuring voor Gemini en ChatGPT.",
   "permissions": ["storage"],
   "background": {
     "service_worker": "background.js"
