@@ -1,34 +1,34 @@
 {
   "manifest_version": 3,
-  "name": "Shorts Auto-Advance (1 repeat)",
-  "version": "0.1.0",
-  "description": "Automatically go to the next YouTube Short after one repeat.",
+  "name": "Shorts Auto-Advance",
+  "version": "0.1.7",
+  "description": "Auto-advance YouTube Shorts after N playthroughs (repeat 0/1/2). Click icon toggles enable; right-click context menu sets repeat.",
   "action": {
-	"default_title": "Shorts Auto-Advance",
-	"default_popup": "popup.html",
-	"default_icon": {
-	  "16": "icon.png",
-	  "32": "icon.png",
-	  "48": "icon.png",
-	  "128": "icon.png"
-	}
+    "default_title": "Shorts Auto-Advance",
+    "default_icon": {
+      "16": "icons/icon_16x16.png",
+      "32": "icons/icon_32x32.png",
+      "48": "icons/icon_48x48.png",
+      "128": "icons/icon_128x128.png"
+    }
   },
   "icons": {
-	"16": "icon.png",
-	"32": "icon.png",
-	"48": "icon.png",
-	"128": "icon.png"
+    "16": "icons/icon_16x16.png",
+    "32": "icons/icon_32x32.png",
+    "48": "icons/icon_48x48.png",
+    "128": "icons/icon_128x128.png"
   },
-  "permissions": ["storage"],
-  "host_permissions": ["https://www.youtube.com/*"],
-  "background": {
-	"service_worker": "background.js"
-  },
+  "permissions": ["scripting", "webNavigation", "contextMenus"],
+  "host_permissions": ["https://www.youtube.com/*", "https://youtube.com/*"],
+  "background": { "service_worker": "background.js" },
   "content_scripts": [
-	{
-	  "matches": ["*://*.youtube.com/shorts/*"],
-	  "js": ["content.js"],
-	  "run_at": "document_idle"
-	}
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://youtube.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
   ]
 }
